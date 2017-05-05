@@ -11,7 +11,9 @@ import models, loader, optim
 import numpy as np
 import logging
 from pprint import pprint
-import pdb
+import pdb, glob, sys
+from collections import OrderedDict
+from copy import deepcopy
 
 opt = add_args([
 ['-o', '/local2/pratikac/results', 'output'],
@@ -39,6 +41,9 @@ opt = add_args([
 ['-v', False, 'verbose'],
 ['--retrain', '', 'checkpoint'],
 ['--validate', '', 'validate a checkpoint'],
+['--validate_ensemble', '', 'validate an ensemble'],
+['--ensemble_mean', '', 'mean of ensemble'],
+['--ensemble_std', '', 'var of ensemble'],
 ['--save', False, 'save network']
 ])
 if opt['L'] > 0:
@@ -164,7 +169,7 @@ def set_dropout(cache = None, p=0):
                 assert len(cache) > 0, 'cache is empty'
                 l.p = cache.pop(0)
 
-def dry_feed():
+def dry_feed(model):
     model.train()
     cache = set_dropout()
     maxb = len(train_loader)
@@ -176,7 +181,7 @@ def dry_feed():
     set_dropout(cache)
 
 def val(e, data_loader):
-    dry_feed()
+    dry_feed(model)
     model.eval()
 
     maxb = len(data_loader)
@@ -203,6 +208,72 @@ def val(e, data_loader):
 
     print((color('red', '**[%2d] %2.4f %2.4f%%\n'))%(e, fs.avg, top1.avg))
     print('')
+
+
+def validate_ensemble(ensemble, data_loader):
+    for m in ensemble:
+        dry_feed(m)
+        m.eval()
+
+    maxb = len(data_loader)
+    fs, top1 = AverageMeter(), AverageMeter()
+    for bi in xrange(maxb):
+        x,y = next(data_loader)
+        bsz = x.size(0)
+
+        x,y =   Variable(x.cuda(), volatile=True), \
+                Variable(y.squeeze().cuda(), volatile=True)
+
+        yh = ensemble[0](x)
+        for m in ensemble[1:]:
+            yh += m(x)
+        yh = yh/float(len(ensemble))
+
+        f = criterion.forward(yh, y).data[0]
+        prec1, = accuracy(yh.data, y.data, topk=(1,))
+        err = 100-prec1[0]
+
+        fs.update(f, bsz)
+        top1.update(err, bsz)
+    
+    print((color('red', 'Ensemble pred: ** %2.4f %2.4f%%\n'))%(fs.avg, top1.avg))
+    print('')
+
+if opt['ensemble_mean'] != '' and opt['ensemble_std'] != '':
+    mu = OrderedDict(json.load(open(opt['ensemble_mean'], 'rb')))
+    std = OrderedDict(json.load(open(opt['ensemble_std'], 'rb')))
+    for k in mu:
+        mu[k] = np.array(mu[k], dtype=np.float32)
+    for k in std:
+        std[k] = np.array(std[k], dtype=np.float32)
+    
+    for i in xrange(10):
+        d = deepcopy(mu)
+        for k in d:
+            d[k] = th.from_numpy(d[k] + 0.5*std[k]*np.random.randn(*std[k].shape))
+    
+        model.load_state_dict(d)
+        model = model.cuda()
+        print('Created model %d'%i)
+        print('Train')
+        val(0, train_loader)
+        print('Val')
+        val(0, test_loader)
+
+if opt['validate_ensemble'] != '':
+    ensemble = []
+    for f in sorted(glob.glob(opt['validate_ensemble'] + '*.pz')):
+        m = deepcopy(model)
+        print('Loading ' + f)
+        d = th.load(f)
+        m.load_state_dict(d['state_dict'])
+        m = m.cuda()
+        ensemble.append(m)
+    
+    print('Train')
+    validate_ensemble(ensemble, train_loader)
+    print('Val')
+    validate_ensemble(ensemble, val_loader)
 
 if opt['validate'] == '':
     for e in xrange(opt['e'], opt['B']):
