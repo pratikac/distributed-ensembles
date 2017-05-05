@@ -69,7 +69,7 @@ ckpt = None
 if not opt['retrain'] == '':
     ckpt = th.load(opt['retrain'])
 if not opt['validate'] == '':
-    ckpt = th.load(opt['retrain'])
+    ckpt = th.load(opt['validate'])
 
 if ckpt is not None:
     model.load_state_dict(ckpt['state_dict'])
@@ -212,4 +212,7 @@ if opt['validate'] == '':
         if opt['save']:
             save(model, opt, marker='s_%s'%opt['s'])
 else:
+    e = 0
     val(e, test_loader)
+    print('Training error')
+    val(e, train_loader)
