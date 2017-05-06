@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 from timeit import default_timer as timer
 import torch.backends.cudnn as cudnn
+import torch.nn.functional as F
 
 from exptutils import *
 import models, loader, optim
@@ -82,7 +83,8 @@ if ckpt is not None:
 
 build_filename(opt, blacklist=['lrs','retrain','step', \
                             'ratio','f','v','dataset', 'augment', 'd',
-                            'depth', 'widen','save','e','validate','l2','eps'])
+                            'depth', 'widen','save','e','validate','l2','eps',
+                            'ensemble_mean','ensemble_std','validate_ensemble'])
 logger = create_logger(opt)
 pprint(opt)
 
@@ -224,12 +226,13 @@ def validate_ensemble(ensemble, data_loader):
         x,y =   Variable(x.cuda(), volatile=True), \
                 Variable(y.squeeze().cuda(), volatile=True)
 
-        yh = ensemble[0](x)
+        yh = F.softmax(ensemble[0](x))
         for m in ensemble[1:]:
-            yh += m(x)
+            yh += F.softmax(m(x))
         yh = yh/float(len(ensemble))
 
-        f = criterion.forward(yh, y).data[0]
+        #f = criterion.forward(yh, y).data[0]
+        f = 0
         prec1, = accuracy(yh.data, y.data, topk=(1,))
         err = 100-prec1[0]
 
@@ -270,8 +273,8 @@ if opt['validate_ensemble'] != '':
         m = m.cuda()
         ensemble.append(m)
     
-    print('Train')
-    validate_ensemble(ensemble, train_loader)
+    #print('Train')
+    #validate_ensemble(ensemble, train_loader)
     print('Val')
     validate_ensemble(ensemble, val_loader)
 
