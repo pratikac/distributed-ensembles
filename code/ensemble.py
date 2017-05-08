@@ -66,20 +66,44 @@ pprint(opt)
 
 model = models.ReplicateModel(getattr(models, opt['m'])(opt), \
             nn.CrossEntropyLoss(), opt['n'], gpus)
-train_loader, val_loader, test_loader = getattr(loader, opt['dataset'])(opt)
+
+train_loaders = []
+val_loader, test_loader = None, None
+for i in xrange(opt['n']):
+    tl, val_loader, test_loader = getattr(loader, opt['dataset'])(opt)
+    train_loaders.append(tl)
 
 optimizer = optim.ElasticSGD(model.ensemble[0].parameters(),
         config = dict(lr=opt['lr'], momentum=0.9, nesterov=True, weight_decay=opt['l2'],
         L=opt['L'], eps=opt['eps'], g0=opt['g0'], g1=opt['g1'], verbose=opt['v'])
         )
 
+def schedule(e):
+    if opt['lrs'] == '':
+        opt['lrs'] = json.dumps([[opt['B'], opt['lr']]])
+
+    lrs = json.loads(opt['lrs'])
+
+    idx = len(lrs)-1
+    for i in xrange(len(lrs)):
+        if e < lrs[i][0]:
+            idx = i
+            break
+    lr = lrs[idx][1]
+
+    print('[LR]: ', lr)
+    if opt['l']:
+        logger.info('[LR] ' + json.dumps({'lr': lr}))
+    optimizer.config['lr'] = lr
+
 def train(e):
+    schedule(e)
     model.train()
 
     f, top1, dt = AverageMeter(), AverageMeter(), AverageMeter()
 
     bsz = opt['b']
-    maxb = len(train_loader)
+    maxb = len(train_loaders[0])
     t0 = timer()
 
     for bi in xrange(maxb):
@@ -89,7 +113,7 @@ def train(e):
             def feval():
                 xs, ys = [], []
                 for i in xrange(opt['n']):
-                    x, y = next(train_loader)
+                    x, y = next(train_loaders[i])
                     x, y =  Variable(x.cuda(model.gidxs[i])), \
                             Variable(y.squeeze().cuda(model.gidxs[i]))
                     xs.append(x)
@@ -133,9 +157,9 @@ def val(e):
     def dry_feed(m):
         m.train()
         cache = set_dropout(m)
-        maxb = len(train_loader)
+        maxb = len(train_loaders[0])
         for bi in xrange(maxb):
-            x,y = next(train_loader)
+            x,y = next(train_loaders[0])
             x,y =   Variable(x.cuda(0), volatile=True), \
                     Variable(y.squeeze().cuda(0), volatile=True)
             yh = m(x)

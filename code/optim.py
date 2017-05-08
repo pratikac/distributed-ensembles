@@ -1,7 +1,10 @@
 from torch.optim import Optimizer
 from copy import deepcopy
 import numpy as np
+
 import torch as th
+import torch.nn as nn
+
 import models
 import pdb
 
@@ -27,9 +30,8 @@ class ESGD(Optimizer):
         defaults = dict(lr=0.1, momentum=0.9, damp=0,
                  weight_decay=0, nesterov=True,
                  L=0, eps=1e-4, g0=1e-2, g1=0, rho=0,
-                 mult=False, hjb=False, sgld=False, heat=False,
+                 sgld=False,
                  verbose=False,
-                 reverse_grad=0,
                  llr=0.1, beta1=0.75)
 
         for k in defaults:
@@ -50,14 +52,10 @@ class ESGD(Optimizer):
         if not 'N' in state:
             state['N'] = models.num_parameters(model)
 
-        hjb = c['hjb']
         sgld = c['sgld']
-        heat = c['heat']
 
         lr = c['lr']
         rho = c['rho']
-        mult = c['mult']
-        reverse_grad = c['reverse_grad']
         mom = c['momentum']
         wd = c['weight_decay']
         damp = c['damp']
@@ -113,12 +111,6 @@ class ESGD(Optimizer):
             eta.normal_()
             dw.add_(eps/np.sqrt(0.5*llr), eta)
 
-            if mult:
-                dw.mul_((maxf-cf))
-
-            if reverse_grad > 0:
-                dw.mul_(-reverse_grad)
-
             if mom > 0:
                 cache['mdw'].mul_(mom).add_(1-damp, dw)
                 if nesterov:
@@ -127,10 +119,7 @@ class ESGD(Optimizer):
                     dw = cache['mdw']
 
             w.add_(-llr, dw)
-            if not heat:
-                mw.mul_(beta1).add_(1-beta1, w)
-            else:
-                mw.add_(w)
+            mw.mul_(beta1).add_(1-beta1, w)
 
         if L > 0 and heat:
             mw.mul_(1/float(L+1))
@@ -242,6 +231,11 @@ class BSGD(Optimizer):
 
         w = state['wc']
         w.add_(-lr, dw)
+
+        # binarize
+        thresh = nn.Threshold(1,0)
+        w = thresh(w).sign_() - thresh(-w).sign_()
+
         unflatten_params(model, w)
         mf,merr = closure()
 
