@@ -309,6 +309,7 @@ class ElasticSGD(Optimizer):
             flatten_params(model.ensemble[i], w[i], dw[i])
             mu.add_(1/float(state['n']), w[i])
 
+        unflatten_params(model.reference, mu)
         for i in xrange(state['n']):
             dw[i].add_(g, w[i]-mu)
 

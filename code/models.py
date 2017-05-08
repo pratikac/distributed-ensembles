@@ -363,8 +363,11 @@ class ptbl(RNN):
 
 class ReplicateModel(nn.Module):
     def __init__(self, m, crit, n, gidxs):
+        super(ReplicateModel, self).__init__()
 
         self.n = n
+        self.reference = deepcopy(m)
+
         self.ensemble = [deepcopy(m) for i in xrange(n)]
         self.criteria = [deepcopy(crit) for i in xrange(n)]
         self.gidxs = [gidxs[i%len(gidxs)] for i in xrange(n)]
@@ -372,18 +375,19 @@ class ReplicateModel(nn.Module):
         self.fs = [None for i in xrange(n)]
         self.errs = [None for i in xrange(n)]
 
+        self.reference.cuda(self.gidxs[0])
         for i in xrange(self.n):
             self.ensemble[i].cuda(self.gidxs[i])
             self.criteria[i].cuda(self.gidxs[i])
 
-        super(ReplicateModel, self).__init__()
-
     def forward(self, xs, ys):
+        yhs = []
         for i in xrange(self.n):
-            yh = self.ensemble[i](xs[i])
-            f = self.criteria[i](yh, ys[i])
+            yhs.append(self.ensemble[i](xs[i]))
 
-            prec1, = exptutils.accuracy(yh.data, ys[i].data, topk=(1,))
+        for i in xrange(self.n):
+            f = self.criteria[i](yhs[i], ys[i])
+            prec1, = exptutils.accuracy(yhs[i].data, ys[i].data, topk=(1,))
 
             self.fs[i] = f
             self.errs[i] = 100.-prec1[0]
@@ -395,9 +399,11 @@ class ReplicateModel(nn.Module):
             self.fs[i].backward()
 
     def train(self):
+        self.reference.train()
         for i in xrange(self.n):
             self.ensemble[i].train()
 
     def eval(self):
+        self.reference.eval()
         for i in xrange(self.n):
             self.ensemble[i].eval()

@@ -116,6 +116,32 @@ def train(e):
     print()
 
 def val(e):
+    def set_dropout(m, cache = None, p=0):
+        if cache is None:
+            cache = []
+            for l in m.modules():
+                if 'Dropout' in str(type(l)):
+                    cache.append(l.p)
+                    l.p = p
+            return cache
+        else:
+            for l in m.modules():
+                if 'Dropout' in str(type(l)):
+                    assert len(cache) > 0, 'cache is empty'
+                    l.p = cache.pop(0)
+
+    def dry_feed(m):
+        m.train()
+        cache = set_dropout(m)
+        maxb = len(train_loader)
+        for bi in xrange(maxb):
+            x,y = next(train_loader)
+            x,y =   Variable(x.cuda(0), volatile=True), \
+                    Variable(y.squeeze().cuda(0), volatile=True)
+            yh = m(x)
+        set_dropout(m,cache)
+
+    dry_feed(model.reference)
     model.eval()
 
     maxb = len(val_loader)
@@ -125,19 +151,28 @@ def val(e):
         x,y = next(val_loader)
         bsz = x.size(0)
 
-        xs, ys = [], []
-        for i in xrange(opt['n']):
+        # xs, ys = [], []
+        # for i in xrange(opt['n']):
 
-            xc,yc =   Variable(x.cuda(model.gidxs[i]), volatile=True), \
-                    Variable(y.squeeze().cuda(model.gidxs[i]), volatile=True)
-            xs.append(xc)
-            ys.append(yc)
+        #     xc,yc =   Variable(x.cuda(model.gidxs[i]), volatile=True), \
+        #             Variable(y.squeeze().cuda(model.gidxs[i]), volatile=True)
+        #     xs.append(xc)
+        #     ys.append(yc)
 
-        fs, errs = model(xs, ys)
-        fs = [fs[i].data[0] for i in xrange(opt['n'])]
+        # fs, errs = model(xs, ys)
+        # fs = [fs[i].data[0] for i in xrange(opt['n'])]
 
-        f.update(np.mean(fs), bsz)
-        top1.update(np.mean(errs), bsz)
+        # f.update(np.mean(fs), bsz)
+        # top1.update(np.mean(errs), bsz)
+        xc,yc = Variable(x.cuda(gpus[0]), volatile=True), \
+                Variable(y.squeeze().cuda(gpus[0]), volatile=True)
+
+        yh = model.reference(xc)
+        _f = nn.CrossEntropyLoss()(yh, yc).data[0]
+        prec1, = accuracy(yh.data, yc.data, topk=(1,))
+        err = 100. - prec1[0]
+        f.update(_f, bsz)
+        top1.update(err, bsz)
 
     print((color('red', '**[%2d] %2.4f %2.4f%%\n'))%(e, f.avg, top1.avg))
     print('')
