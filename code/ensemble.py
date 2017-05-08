@@ -38,6 +38,7 @@ opt = add_args([
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
+['-t', 4, 'num threads'],
 ['-v', False, 'verbose'],
 ['--validate', '', 'validate a checkpoint'],
 ['--validate_ensemble', '', 'validate an ensemble'],
@@ -57,7 +58,7 @@ th.cuda.manual_seed_all(opt['s'])
 cudnn.benchmark = True
 
 build_filename(opt, blacklist=['lrs','retrain','step', \
-                            'f','v','dataset', 'augment', 'd',
+                            'f','v','dataset', 'augment', 'd', 't',
                             'depth', 'widen','save','e','validate','l2','eps',
                             'validate_ensemble'])
 logger = create_logger(opt)
@@ -75,32 +76,36 @@ optimizer = optim.ElasticSGD(model.ensemble[0].parameters(),
 def train(e):
     model.train()
 
+    fs, top1, dts = AverageMeter(), AverageMeter(), AverageMeter()
+
     bsz = opt['b']
     maxb = len(train_loader)
 
-    for bi in xrange(maxb):
+    for bi in xrange(maxb*opt['n']):
+        dt = timer()
+
         def helper():
-            def feval(bprop=True):
+            def feval():
                 xs, ys = [], []
                 for i in xrange(opt['n']):
-                    x, y =  next(train_loader)
+                    x, y = next(train_loader)
                     x, y =  Variable(x.cuda(model.gidxs[i])), \
                             Variable(y.squeeze().cuda(model.gidxs[i]))
                     xs.append(x)
                     ys.append(y)
 
                 fs, errs = model(xs, ys)
-                # for i in xrange(opt['n']):
-                #     fs[i].backward()
                 model.backward()
                 fs = [fs[i].data[0] for i in xrange(opt['n'])]
-
                 return fs, errs
             return feval
 
         fs, errs = optimizer.step(helper(), model)
-        if bi % 100 == 0:
+        dts.update(timer()-dt, 1)
+
+        if bi % 25 == 0:
             print(np.mean(fs), np.std(fs), np.mean(errs), np.std(errs))
+            print('dt: %.3f [s]'%(dts.avg))
 
 def val(e):
     pass
