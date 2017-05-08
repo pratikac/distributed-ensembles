@@ -2,6 +2,8 @@ import torch as th
 import torch.nn as nn
 from torch.autograd import Variable
 import math, logging, pdb
+from copy import deepcopy
+import exptutils
 
 class View(nn.Module):
     def __init__(self,o):
@@ -48,14 +50,14 @@ class small_mnistfc(nn.Module):
         super(small_mnistfc, self).__init__()
         self.name = 'small_mnsitfc'
 
-        c = 200
+        c = 500
         opt['d'] = 0.
         opt['l2'] = 0
 
         self.m = nn.Sequential(
             View(784),
             nn.Linear(784,c),
-            nn.Sigmoid(),
+            nn.Hardtanh(),
             nn.BatchNorm1d(c),
             # nn.Linear(c,c),
             # nn.Tanh(),
@@ -357,3 +359,37 @@ class ptbl(RNN):
                 d=d, tie=True, m='LSTM')
 
         super(ptbl, self).__init__(param)
+
+
+class ReplicateModel(nn.Module):
+    def __init__(self, m, crit, n, gidxs):
+
+        self.n = n
+        self.ensemble = [deepcopy(m) for i in xrange(n)]
+        self.criteria = [deepcopy(crit) for i in xrange(n)]
+        self.gidxs = [gidxs[i%len(gidxs)] for i in xrange(n)]
+
+        self.fs = [None for i in xrange(n)]
+        self.errs = [None for i in xrange(n)]
+
+        for i in xrange(n):
+            self.ensemble[i].cuda(self.gidxs[i])
+            self.criteria[i].cuda(self.gidxs[i])
+
+        super(ReplicateModel, self).__init__()
+
+    def forward(self, xs, ys):
+        for i in xrange(self.n):
+            yh = self.ensemble[i](xs[i])
+            f = self.criteria[i].forward(yh, ys[i])
+
+            prec1, = exptutils.accuracy(yh.data, ys[i].data, topk=(1,))
+
+            self.fs[i] = f
+            self.errs[i] = 100.-prec1[0]
+
+        return self.fs, self.errs
+
+    def backward(self):
+        for i in xrange(self.n):
+            self.fs[i].backward()

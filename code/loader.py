@@ -18,7 +18,7 @@ class sampler_t:
             self.n = int(self.n*frac)
 
         self.b = batch_size
-        self.idx = th.range(0, self.b-1).long()
+        self.idx = th.arange(0, self.b).long()
         self.train = train
         self.augment = augment
         self.sidx = 0
