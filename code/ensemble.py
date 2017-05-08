@@ -116,9 +116,32 @@ def train(e):
     print()
 
 def val(e):
-    pass
+    model.eval()
+
+    maxb = len(val_loader)
+    f, top1 = AverageMeter(), AverageMeter()
+
+    for bi in xrange(maxb):
+        x,y = next(val_loader)
+        bsz = x.size(0)
+
+        xs, ys = [], []
+        for i in xrange(opt['n']):
+
+            xc,yc =   Variable(x.cuda(model.gidxs[i]), volatile=True), \
+                    Variable(y.squeeze().cuda(model.gidxs[i]), volatile=True)
+            xs.append(xc)
+            ys.append(yc)
+
+        fs, errs = model(xs, ys)
+        fs = [fs[i].data[0] for i in xrange(opt['n'])]
+
+        f.update(np.mean(fs), bsz)
+        top1.update(np.mean(errs), bsz)
+
+    print((color('red', '**[%2d] %2.4f %2.4f%%\n'))%(e, f.avg, top1.avg))
+    print('')
 
 for e in xrange(opt['e'], opt['B']):
     train(e)
-    if e % opt['f'] == opt['f'] -1:
-        val(e)
+    val(e)

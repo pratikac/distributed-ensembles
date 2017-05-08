@@ -52,9 +52,9 @@ class sampler_t:
                 x = th.from_numpy(x)
         else:
             s = self.sidx
-            e = min(s+self.b-1, self.n-1)
+            e = min(s+self.b, self.n)
 
-            self.idx = th.range(s, e).long()
+            self.idx = th.arange(s, e).long()
             self.sidx += self.b
             if self.sidx >= self.n:
                 self.sidx = 0

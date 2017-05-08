@@ -248,14 +248,14 @@ class BSGD(Optimizer):
         return mf,merr
 
 class ElasticSGD(Optimizer):
-    # params is a list here which contains the entire ensemble in order
+    # params here is a dummy, we will handle everything manually
     def __init__(self, params, config = {}):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0,
-                 weight_decay=0, nesterov=True,
-                 L=0, eps=1e-4, g0=1e-2, g1=0, rho=0,
-                 verbose=False,
-                 llr=0.1)
+                weight_decay=0, nesterov=True,
+                g0=1e-2, g1=0,
+                verbose=False,
+                llr=0.1)
 
         for k in defaults:
             if config.get(k, None) is None:
@@ -281,6 +281,8 @@ class ElasticSGD(Optimizer):
         damp = c['dampening']
         nesterov = c['nesterov']
         verbose = c['verbose']
+        g0 = c['g0']
+        g1 = c['g1']
 
         if not 't' in state:
             state['t'] = 0
@@ -290,18 +292,25 @@ class ElasticSGD(Optimizer):
             state['dwc'] = [tmp.clone() for i in xrange(state['n'])]
             state['mdw'] = [tmp.clone().zero_() for i in xrange(state['n'])]
 
+            state['mu'] = tmp.clone()
 
         state['t'] += 1
+        g = g0*(1+g1)**state['t']
 
         for i in xrange(state['n']):
             model.ensemble[i].zero_grad()
         fs, errs = closure()
 
         w = state['wc']
+        mu = state['mu'].zero_()
         dw, mdw = state['dwc'], state['mdw']
 
         for i in xrange(state['n']):
             flatten_params(model.ensemble[i], w[i], dw[i])
+            mu.add_(1/float(state['n']), w[i])
+
+        for i in xrange(state['n']):
+            dw[i].add_(g, w[i]-mu)
 
             if mom > 0:
                 mdw[i].mul_(mom).add_(1-damp, dw[i])
