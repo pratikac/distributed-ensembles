@@ -372,7 +372,7 @@ class ReplicateModel(nn.Module):
         self.fs = [None for i in xrange(n)]
         self.errs = [None for i in xrange(n)]
 
-        for i in xrange(n):
+        for i in xrange(self.n):
             self.ensemble[i].cuda(self.gidxs[i])
             self.criteria[i].cuda(self.gidxs[i])
 
@@ -381,7 +381,7 @@ class ReplicateModel(nn.Module):
     def forward(self, xs, ys):
         for i in xrange(self.n):
             yh = self.ensemble[i](xs[i])
-            f = self.criteria[i].forward(yh, ys[i])
+            f = self.criteria[i](yh, ys[i])
 
             prec1, = exptutils.accuracy(yh.data, ys[i].data, topk=(1,))
 
@@ -393,3 +393,11 @@ class ReplicateModel(nn.Module):
     def backward(self):
         for i in xrange(self.n):
             self.fs[i].backward()
+
+    def train(self):
+        for i in xrange(self.n):
+            self.ensemble[i].train()
+
+    def eval(self):
+        for i in xrange(self.n):
+            self.ensemble[i].eval()

@@ -246,3 +246,72 @@ class BSGD(Optimizer):
         mf,merr = closure()
 
         return mf,merr
+
+class ElasticSGD(Optimizer):
+    # params is a list here which contains the entire ensemble in order
+    def __init__(self, params, config = {}):
+
+        defaults = dict(lr=0.1, momentum=0.9, dampening=0,
+                 weight_decay=0, nesterov=True,
+                 L=0, eps=1e-4, g0=1e-2, g1=0, rho=0,
+                 verbose=False,
+                 llr=0.1)
+
+        for k in defaults:
+            if config.get(k, None) is None:
+                config[k] = defaults[k]
+
+        super(ElasticSGD, self).__init__(params, config)
+        self.config = config
+
+    def step(self, closure=None, model=None):
+        assert (closure is not None) and (model is not None), \
+                'attach closure for ElasticSGD, replicated model'
+
+        state = self.state
+        c = self.config
+
+        if not 'N' in state:
+            state['N'] = models.num_parameters(model.ensemble[0])
+            state['n'] = len(model.ensemble)
+
+        lr = c['lr']
+        mom = c['momentum']
+        wd = c['weight_decay']
+        damp = c['dampening']
+        nesterov = c['nesterov']
+        verbose = c['verbose']
+
+        if not 't' in state:
+            state['t'] = 0
+            N = state['N']
+            tmp = th.FloatTensor(N).cuda()
+            state['wc'] = [tmp.clone() for i in xrange(state['n'])]
+            state['dwc'] = [tmp.clone() for i in xrange(state['n'])]
+            state['mdw'] = [tmp.clone().zero_() for i in xrange(state['n'])]
+
+
+        state['t'] += 1
+
+        for i in xrange(state['n']):
+            model.ensemble[i].zero_grad()
+        fs, errs = closure()
+
+        w = state['wc']
+        dw, mdw = state['dwc'], state['mdw']
+
+        for i in xrange(state['n']):
+            flatten_params(model.ensemble[i], w[i], dw[i])
+
+            if mom > 0:
+                mdw[i].mul_(mom).add_(1-damp, dw[i])
+                if nesterov:
+                    dw[i].add_(mom, mdw[i])
+                else:
+                    dw[i] = mdw[i]
+
+            w[i].add_(-lr, dw[i])
+
+            unflatten_params(model.ensemble[i], w[i])
+
+        return fs, errs

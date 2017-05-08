@@ -67,6 +67,10 @@ model = models.ReplicateModel(getattr(models, opt['m'])(opt), \
             nn.CrossEntropyLoss(), opt['n'], gpus)
 train_loader, val_loader, test_loader = getattr(loader, opt['dataset'])(opt)
 
+optimizer = optim.ElasticSGD(model.ensemble[0].parameters(),
+        config = dict(lr=opt['lr'], momentum=0.9, nesterov=True, weight_decay=opt['l2'],
+        L=opt['L'], eps=opt['eps'], g0=opt['g0'], g1=opt['g1'], verbose=opt['v'])
+        )
 
 def train(e):
     model.train()
@@ -85,19 +89,18 @@ def train(e):
                     xs.append(x)
                     ys.append(y)
 
-                model.zero_grad()
                 fs, errs = model(xs, ys)
+                # for i in xrange(opt['n']):
+                #     fs[i].backward()
                 model.backward()
-
-                if bi % 100 == 0:
-                    fs = [fs[i].data[0] for i in xrange(opt['n'])]
-                    print(fs, errs)
+                fs = [fs[i].data[0] for i in xrange(opt['n'])]
 
                 return fs, errs
             return feval
 
-        feval = helper()
-        feval()
+        fs, errs = optimizer.step(helper(), model)
+        if bi % 100 == 0:
+            print(np.mean(fs), np.std(fs), np.mean(errs), np.std(errs))
 
 def val(e):
     pass
