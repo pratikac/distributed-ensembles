@@ -82,25 +82,25 @@ def mnist(opt):
         d2.test_labels, train=False)
     return train, val, val
 
-def threaded_mnist(opt):
-    frac = opt.get('frac', 1.0)
-    d1, d2 = datasets.MNIST('/local2/pratikac/mnist', train=True), \
-             datasets.MNIST('/local2/pratikac/mnist', train=False)
-    d1.train_data, d2.test_data = d1.train_data.view(-1,1,28,28).float(), \
-            d2.test_data.view(-1,1,28,28).float()
+# def threaded_mnist(opt):
+#     frac = opt.get('frac', 1.0)
+#     d1, d2 = datasets.MNIST('/local2/pratikac/mnist', train=True), \
+#              datasets.MNIST('/local2/pratikac/mnist', train=False)
+#     d1.train_data, d2.test_data = d1.train_data.view(-1,1,28,28).float(), \
+#             d2.test_data.view(-1,1,28,28).float()
 
-    n = d1.train_data.size(0)
-    idx = th.randperm(n)
-    d1.train_data = th.index_select(d1.train_data, 0, idx)[:n]
-    d1.train_labels = th.index_select(d1.train_labels, 0, idx)[:n]
+#     n = d1.train_data.size(0)
+#     idx = th.randperm(n)
+#     d1.train_data = th.index_select(d1.train_data, 0, idx)[:n]
+#     d1.train_labels = th.index_select(d1.train_labels, 0, idx)[:n]
 
-    kwargs = {'num_workers': opt['t'], 'pin_memory': True}
-    train = th.utils.data.DataLoader(th.utils.data.TensorDataset(d1.train_data, d1.train_labels),
-        batch_size=opt['b'], shuffle=True, **kwargs)
-    val = th.utils.data.DataLoader(th.utils.data.TensorDataset(d2.test_data, d2.test_labels),
-        batch_size=opt['b'], shuffle=False, **kwargs)
+#     kwargs = {'num_workers': opt['t'], 'pin_memory': True}
+#     train = th.utils.data.DataLoader(th.utils.data.TensorDataset(d1.train_data, d1.train_labels),
+#         batch_size=opt['b'], shuffle=True, **kwargs)
+#     val = th.utils.data.DataLoader(th.utils.data.TensorDataset(d2.test_data, d2.test_labels),
+#         batch_size=opt['b'], shuffle=False, **kwargs)
 
-    return train, val, val
+#     return train, val, val
 
 def rotmnist(opt):
     frac = opt.get('frac', 1.0)

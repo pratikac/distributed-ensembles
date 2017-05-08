@@ -76,13 +76,14 @@ optimizer = optim.ElasticSGD(model.ensemble[0].parameters(),
 def train(e):
     model.train()
 
-    fs, top1, dts = AverageMeter(), AverageMeter(), AverageMeter()
+    f, top1, dt = AverageMeter(), AverageMeter(), AverageMeter()
 
     bsz = opt['b']
     maxb = len(train_loader)
+    t0 = timer()
 
-    for bi in xrange(maxb*opt['n']):
-        dt = timer()
+    for bi in xrange(maxb):
+        _dt = timer()
 
         def helper():
             def feval():
@@ -101,11 +102,18 @@ def train(e):
             return feval
 
         fs, errs = optimizer.step(helper(), model)
-        dts.update(timer()-dt, 1)
+
+        f.update(np.mean(fs), bsz)
+        top1.update(np.mean(errs), bsz)
+        dt.update(timer()-_dt, 1)
 
         if bi % 25 == 0:
-            print(np.mean(fs), np.std(fs), np.mean(errs), np.std(errs))
-            print('dt: %.3f [s]'%(dts.avg))
+            print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f %2.2f%%'))%(dt.avg, e,bi,maxb,
+                f.avg, top1.avg))
+
+    print((color('blue', '++[%2d] %2.4f %2.2f%% [%2.2fs]'))% (e,
+        f.avg, top1.avg, timer()-t0))
+    print()
 
 def val(e):
     pass
