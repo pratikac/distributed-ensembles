@@ -21,6 +21,7 @@ opt = add_args([
 ['-m', 'lenet', 'lenet | mnistfc | allcnn | wideresnet'],
 ['--optim', 'SGD', 'ESGD | HJB | SGLD | SGD | HEAT'],
 ['--dataset', 'mnist', 'mnist | rotmnist | cifar10 | cifar100'],
+['--frac', 1.0, 'fraction of dataset'],
 ['-b', 128, 'batch_size'],
 ['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
@@ -44,7 +45,7 @@ opt = add_args([
 ['--validate', '', 'validate a checkpoint'],
 ['--validate_ensemble', '', 'validate an ensemble'],
 ['--ensemble_mean', '', 'mean of ensemble'],
-['--ensemble_std', '', 'var of ensemble'],
+['--ensemble_std', '', 'std of ensemble'],
 ['--save', False, 'save network']
 ])
 if opt['L'] > 0:
@@ -238,7 +239,7 @@ def validate_ensemble(ensemble, data_loader):
 
         fs.update(f, bsz)
         top1.update(err, bsz)
-    
+
     print((color('red', 'Ensemble pred: ** %2.4f %2.4f%%\n'))%(fs.avg, top1.avg))
     print('')
 
@@ -249,12 +250,12 @@ if opt['ensemble_mean'] != '' and opt['ensemble_std'] != '':
         mu[k] = np.array(mu[k], dtype=np.float32)
     for k in std:
         std[k] = np.array(std[k], dtype=np.float32)
-    
+
     for i in xrange(10):
         d = deepcopy(mu)
         for k in d:
             d[k] = th.from_numpy(d[k] + 0.5*std[k]*np.random.randn(*std[k].shape))
-    
+
         model.load_state_dict(d)
         model = model.cuda()
         print('Created model %d'%i)
@@ -272,7 +273,7 @@ if opt['validate_ensemble'] != '':
         m.load_state_dict(d['state_dict'])
         m = m.cuda()
         ensemble.append(m)
-    
+
     #print('Train')
     #validate_ensemble(ensemble, train_loader)
     print('Val')

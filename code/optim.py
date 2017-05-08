@@ -191,36 +191,58 @@ class SGLD(ESGD):
         super(SGLD, self).__init__(params, config)
         self.config = config
 
-class HJB(ESGD):
+class BSGD(Optimizer):
     def __init__(self, params, config = {}):
 
-        defaults = dict(lr=0.1, momentum=0.9, damp=0,
-                 weight_decay=0, nesterov=True,
-                 L=0, eps=1e-4, g0=1e-2, g1=0,
-                 verbose=False,
-                 mult=False, hjb=True)
+        defaults = dict(lr=0.1, momentum=0.9, dampening=0,
+             weight_decay=0, nesterov=True, L=0)
         for k in defaults:
             if config.get(k, None) is None:
                 config[k] = defaults[k]
 
-        config['eps'] = 1e-8
-        config['llr'] = 0.25
-        config['beta1'] = 1e-4
-        super(HJB, self).__init__(params, config)
+        super(BSGD, self).__init__(params, config)
         self.config = config
 
-class HEAT(ESGD):
-    def __init__(self, params, config = {}):
+    def step(self, closure=None, model=None, criterion=None):
+        assert (closure is not None) and (model is not None) and (criterion is not None), \
+                'attach closure for BSGD, model and criterion'
+        mf,merr = closure()
 
-        defaults = dict(lr=0.1, momentum=0.9, damp=0,
-                 weight_decay=0, nesterov=True,
-                 L=100, g0=10, g1=0,
-                 verbose=False,
-                 mult=False, heat=True)
+        state = self.state
+        c = self.config
 
-        for k in defaults:
-            if config.get(k, None) is None:
-                config[k] = defaults[k]
+        if not 'N' in state:
+            state['N'] = models.num_parameters(model)
 
-        super(HEAT, self).__init__(params, config)
-        self.config = config
+        lr = c['lr']
+        mom = c['momentum']
+        wd = c['weight_decay']
+        damp = c['dampening']
+        nesterov = c['nesterov']
+        verbose = c['verbose']
+
+        if not 't' in state:
+            state['t'] = 0
+            N = state['N']
+            tmp = th.FloatTensor(N).cuda()
+            state['wc'] = tmp.clone()
+            state['dwc'] = tmp.clone()
+            state['mdw'] = tmp.clone().zero_()
+
+        state['t'] += 1
+        flatten_params(model, state['wc'], state['dwc'])
+
+        dw = state['dwc']
+        if mom > 0:
+            state['mdw'].mul_(mom).add_(1-damp, dw)
+            if nesterov:
+                dw.add_(mom, state['mdw'])
+            else:
+                dw = state['mdw']
+
+        w = state['wc']
+        w.add_(-lr, dw)
+        unflatten_params(model, w)
+        mf,merr = closure()
+
+        return mf,merr

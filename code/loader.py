@@ -7,9 +7,16 @@ import os, sys, pdb, math, random
 import cv2
 
 class sampler_t:
-    def __init__(self, batch_size, x,y, train=True, augment=False):
+    def __init__(self, batch_size, x,y, train=True, augment=False, frac=1.0):
         self.n = x.size(0)
         self.x, self.y = x,y
+
+        if train:
+            idx = th.randperm(self.n)
+            self.x = th.index_select(self.x, 0, idx)
+            self.y = th.index_select(self.y, 0, idx)
+            self.n = int(self.n*frac)
+
         self.b = batch_size
         self.idx = th.range(0, self.b-1).long()
         self.train = train
@@ -65,28 +72,33 @@ class sampler_t:
         return int(math.ceil(self.n / float(self.b)))
 
 def mnist(opt):
+    frac = opt.get('frac', 1.0)
     d1, d2 = datasets.MNIST('/local2/pratikac/mnist', train=True), \
             datasets.MNIST('/local2/pratikac/mnist', train=False)
 
     train = sampler_t(opt['b'], d1.train_data.view(-1,1,28,28).float(),
-        d1.train_labels, augment=opt['augment'])
+        d1.train_labels, augment=opt['augment'], frac=frac)
     val = sampler_t(opt['b'], d2.test_data.view(-1,1,28,28).float(),
         d2.test_labels, train=False)
     return train, val, val
 
 def rotmnist(opt):
+    frac = opt.get('frac', 1.0)
+
     loc = '/local2/pratikac/rotmnist/'
     d1 = np.load(loc+'mnist_all_rotation_normalized_float_train_valid.npy')
     d2 = np.load(loc+'mnist_all_rotation_normalized_float_test.npy')
 
     train = sampler_t(opt['b'], th.from_numpy(d1[:,:-1]).float().view(-1,1,28,28)/255.,
-            th.from_numpy(d1[:,-1]).long(), augment=opt['augment'])
+            th.from_numpy(d1[:,-1]).long(), augment=opt['augment'], frac=frac)
     val = sampler_t(opt['b'], th.from_numpy(d2[:,:-1]).float().view(-1,1,28,28)/255.,
             th.from_numpy(d2[:,-1]).long(), train=False)
 
     return train, val, val
 
 def cifar10(opt):
+    frac = opt.get('frac', 1.0)
+
     loc = '/local2/pratikac/cifar/'
     if 'resnet' in opt['m']:
         d1 = np.load(loc+'cifar10-train.npz')
@@ -96,12 +108,14 @@ def cifar10(opt):
         d2 = np.load(loc+'cifar10-test-proc.npz')
 
     train = sampler_t(opt['b'], th.from_numpy(d1['data']),
-                     th.from_numpy(d1['labels']), augment=opt['augment'])
+                     th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac)
     val = sampler_t(opt['b'], th.from_numpy(d2['data']),
                      th.from_numpy(d2['labels']), train=False)
     return train, val, val
 
 def cifar100(opt):
+    frac = opt.get('frac', 1.0)
+
     loc = '/local2/pratikac/cifar/'
     if 'resnet' in opt['m']:
         d1 = np.load(loc+'cifar100-train.npz')
@@ -111,7 +125,7 @@ def cifar100(opt):
         d2 = np.load(loc+'cifar100-test-proc.npz')
 
     train = sampler_t(opt['b'], th.from_numpy(d1['data']),
-                     th.from_numpy(d1['labels']), augment=opt['augment'])
+                     th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac)
     val = sampler_t(opt['b'], th.from_numpy(d2['data']),
                      th.from_numpy(d2['labels']), train=False)
     return train, val, val
