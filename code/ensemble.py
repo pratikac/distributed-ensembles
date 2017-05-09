@@ -50,7 +50,7 @@ if opt['l']:
     opt['f'] = 1
 
 gpus = [0,1,2]
-th.set_num_threads(2)
+th.set_num_threads(opt['t'])
 random.seed(opt['s'])
 np.random.seed(opt['s'])
 th.manual_seed(opt['s'])
