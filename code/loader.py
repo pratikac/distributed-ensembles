@@ -9,7 +9,7 @@ import cv2
 class sampler_t:
     def __init__(self, batch_size, x,y, train=True, augment=False, frac=1.0):
         self.n = x.size(0)
-        self.x, self.y = x,y
+        self.x, self.y = x.pin_memory(), y.pin_memory()
 
         if train:
             idx = th.randperm(self.n)

@@ -30,7 +30,7 @@ opt = add_args([
 ['--lrs', '', 'learning rate schedule'],
 ['--l2', 0.0, 'ell-2'],
 ['-d', 0.0, 'dropout'],
-['-n', 1, '#replicas'],
+['-n', 1, 'replicas'],
 ['-L', 0, 'sgld iterations'],
 ['--eps', 1e-4, 'sgld noise'],
 ['--g0', 1e-4, 'gamma'],
@@ -114,8 +114,8 @@ def train(e):
                 xs, ys = [], []
                 for i in xrange(opt['n']):
                     x, y = next(train_loaders[i])
-                    x, y =  Variable(x.cuda(model.gidxs[i])), \
-                            Variable(y.squeeze().cuda(model.gidxs[i]))
+                    x, y =  Variable(x.cuda(model.gidxs[i], async=True)), \
+                            Variable(y.squeeze().cuda(model.gidxs[i], async=True))
                     xs.append(x)
                     ys.append(y)
 
@@ -169,8 +169,8 @@ def val(e):
         maxb = len(train_loaders[0])
         for bi in xrange(maxb):
             x,y = next(train_loaders[0])
-            x,y =   Variable(x.cuda(0), volatile=True), \
-                    Variable(y.squeeze().cuda(0), volatile=True)
+            x,y =   Variable(x.cuda(0, async=True), volatile=True), \
+                    Variable(y.squeeze().cuda(0, async=True), volatile=True)
             yh = m(x)
         set_dropout(m,cache)
 
@@ -197,8 +197,8 @@ def val(e):
 
         # f.update(np.mean(fs), bsz)
         # top1.update(np.mean(errs), bsz)
-        xc,yc = Variable(x.cuda(gpus[0]), volatile=True), \
-                Variable(y.squeeze().cuda(gpus[0]), volatile=True)
+        xc,yc = Variable(x.cuda(gpus[0], async=True), volatile=True), \
+                Variable(y.squeeze().cuda(gpus[0], async=True), volatile=True)
 
         yh = model.reference(xc)
         _f = nn.CrossEntropyLoss()(yh, yc).data[0]
