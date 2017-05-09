@@ -131,9 +131,18 @@ def train(e):
         top1.update(np.mean(errs), bsz)
         dt.update(timer()-_dt, 1)
 
+        if opt['l']:
+            s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), top1=np.mean(errs))
+            logger.info('[LOG] ' + json.dumps(s))
+
         if bi % 25 == 0:
             print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f %2.2f%%'))%(dt.avg, e,bi,maxb,
                 f.avg, top1.avg))
+
+    if opt['l']:
+        s = dict(e=e, i=0, f=f.avg, top1=top1.avg, train=True)
+        logger.info('[SUMMARY] ' + json.dumps(s))
+        logger.info('')
 
     print((color('blue', '++[%2d] %2.4f %2.2f%% [%2.2fs]'))% (e,
         f.avg, top1.avg, timer()-t0))
@@ -197,6 +206,11 @@ def val(e):
         err = 100. - prec1[0]
         f.update(_f, bsz)
         top1.update(err, bsz)
+
+    if opt['l']:
+        s = dict(e=e, i=0, f=f.avg, top1=top1.avg, val=True)
+        logger.info('[SUMMARY] ' + json.dumps(s))
+        logger.info('')
 
     print((color('red', '**[%2d] %2.4f %2.4f%%\n'))%(e, f.avg, top1.avg))
     print('')
