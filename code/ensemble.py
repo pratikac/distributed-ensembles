@@ -106,18 +106,25 @@ def train(e):
     maxb = len(train_loaders[0])
     t0 = timer()
 
+    # xs = [Variable(th.randn(opt['b'],3,32,32).cuda(model.gidxs[i])) for i in xrange(opt['n'])]
+    # ys = [Variable((th.rand(opt['b'],)*10).long().cuda(model.gidxs[i])) for i in xrange(opt['n'])]
+    fs = [0 for i in xrange(opt['n'])]
+    errs = [0 for i in xrange(opt['n'])]
+
     for bi in xrange(maxb):
         _dt = timer()
 
         def helper():
             def feval():
-                xs, ys = [], []
+                xs, ys, yhs =   [None for i in xrange(opt['n'])], \
+                                [None for i in xrange(opt['n'])], \
+                                [None for i in xrange(opt['n'])]
+                #fs, errs = [None for i in xrange(opt['n'])], [None for i in xrange(opt['n'])]
+
                 for i in xrange(opt['n']):
                     x, y = next(train_loaders[i])
-                    x, y =  Variable(x.cuda(model.gidxs[i], async=True)), \
+                    xs[i], ys[i] =  Variable(x.cuda(model.gidxs[i], async=True)), \
                             Variable(y.squeeze().cuda(model.gidxs[i], async=True))
-                    xs.append(x)
-                    ys.append(y)
 
                 fs, errs = model(xs, ys)
                 model.backward()
@@ -125,6 +132,7 @@ def train(e):
                 return fs, errs
             return feval
 
+        #helper()()
         fs, errs = optimizer.step(helper(), model)
 
         f.update(np.mean(fs), bsz)

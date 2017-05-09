@@ -122,7 +122,7 @@ def train(e):
         def helper():
             def feval(bprop=True):
                 x,y = next(train_loader)
-                x, y = Variable(x.cuda()), Variable(y.squeeze().cuda())
+                x, y = Variable(x.cuda(async=True)), Variable(y.squeeze().cuda(async=True))
                 bsz = x.size(0)
 
                 optimizer.zero_grad()
@@ -178,8 +178,8 @@ def dry_feed(model):
     maxb = len(train_loader)
     for bi in xrange(maxb):
         x,y = next(train_loader)
-        x,y =   Variable(x.cuda(), volatile=True), \
-                Variable(y.squeeze().cuda(), volatile=True)
+        x,y =   Variable(x.cuda(async=True), volatile=True), \
+                Variable(y.squeeze(async=True).cuda(), volatile=True)
         yh = model(x)
     set_dropout(cache)
 
@@ -193,8 +193,8 @@ def val(e, data_loader):
         x,y = next(data_loader)
         bsz = x.size(0)
 
-        x,y =   Variable(x.cuda(), volatile=True), \
-                Variable(y.squeeze().cuda(), volatile=True)
+        x,y =   Variable(x.cuda(async=True), volatile=True), \
+                Variable(y.squeeze(async=True).cuda(), volatile=True)
         yh = model(x)
 
         f = criterion.forward(yh, y).data[0]

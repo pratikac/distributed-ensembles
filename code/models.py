@@ -381,9 +381,9 @@ class ReplicateModel(nn.Module):
             self.criteria[i].cuda(self.gidxs[i])
 
     def forward(self, xs, ys):
-        yhs = []
+        yhs = [None for i in xrange(self.n)]
         for i in xrange(self.n):
-            yhs.append(self.ensemble[i](xs[i]))
+            yhs[i] = self.ensemble[i](xs[i])
 
         for i in xrange(self.n):
             f = self.criteria[i](yhs[i], ys[i])

@@ -121,9 +121,6 @@ class ESGD(Optimizer):
             w.add_(-llr, dw)
             mw.mul_(beta1).add_(1-beta1, w)
 
-        if L > 0 and heat:
-            mw.mul_(1/float(L+1))
-
         dw = state['dw'].zero_()
         if L > 0:
             if rho > 0:
@@ -152,7 +149,6 @@ class ESGD(Optimizer):
         w = state['wc']
         w.add_(-lr, dw)
         unflatten_params(model, w)
-        mf,merr = closure()
 
         return mf,merr
 
@@ -281,12 +277,17 @@ class ElasticSGD(Optimizer):
         if not 't' in state:
             state['t'] = 0
             N = state['N']
-            tmp = th.FloatTensor(N).cuda()
-            state['wc'] = [tmp.clone() for i in xrange(state['n'])]
-            state['dwc'] = [tmp.clone() for i in xrange(state['n'])]
-            state['mdw'] = [tmp.clone().zero_() for i in xrange(state['n'])]
+            tmp = th.FloatTensor(N)
+            state['wc'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
+            state['dwc'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
+            state['mdw'] = [tmp.clone().cuda(model.gidxs[i]).zero_() for i in xrange(state['n'])]
 
-            state['mu'] = tmp.clone()
+            state['mu'] = tmp.clone().cuda(0)
+
+            cache = state['cache']
+            # copies of mu on each GPU
+            cache['mu'] = tmp.clone().cuda(0)
+            cache['rmu'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
 
         state['t'] += 1
         g = g0*(1+g1)**state['t']
@@ -296,26 +297,31 @@ class ElasticSGD(Optimizer):
         fs, errs = closure()
 
         w = state['wc']
-        mu = state['mu'].zero_()
         dw, mdw = state['dwc'], state['mdw']
+        mu = state['mu'].zero_()
+        cmu, crmu = state['cache']['mu'], state['cache']['rmu']
 
         for i in xrange(state['n']):
             flatten_params(model.ensemble[i], w[i], dw[i])
-            mu.add_(1/float(state['n']), w[i])
+
+            cmu.copy_(w[i])
+            mu.add_(1/float(state['n']), cmu)
+        for i in xrange(state['n']):
+            crmu[i].copy_(mu)
 
         if verbose and state['t'] % 25 == 0:
             debug = dict()
             debug['mu'] = mu.norm()
             for i in xrange(state['n']):
                 debug['dw'+str(i)] = dw[i].norm()
-                debug['dwmu'+str(i)] = (w[i]-mu).norm()
-                debug['ddwmu'+str(i)] = th.dot(dw[i],w[i]-mu)/dw[i].norm()/((w[i]-mu).norm() + 1e-6)
+                debug['dwmu'+str(i)] = (w[i]-crmu[i]).norm()
+                debug['ddwmu'+str(i)] = th.dot(dw[i],w[i]-crmu[i])/dw[i].norm()/((w[i]-crmu[i]).norm() + 1e-6)
             debug['g'] = g
             print {k : round(v, 5) for k,v in debug.items()}
 
         unflatten_params(model.reference, mu)
         for i in xrange(state['n']):
-            dw[i].add_(g, w[i]-mu)
+            dw[i].add_(g, w[i]-crmu[i])
 
             if mom > 0:
                 mdw[i].mul_(mom).add_(1-damp, dw[i])
