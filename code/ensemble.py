@@ -35,6 +35,7 @@ opt = add_args([
 ['--eps', 1e-4, 'sgld noise'],
 ['--g0', 1e-4, 'gamma'],
 ['--g1', 0.0, 'scoping'],
+['--a0', 1e-2, 'alpha, loss: f + alpha fkld'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -64,8 +65,8 @@ build_filename(opt, blacklist=['lrs','retrain','step', \
 logger = create_logger(opt)
 pprint(opt)
 
-model = models.ReplicateModel(getattr(models, opt['m'])(opt), \
-            nn.CrossEntropyLoss(), opt['n'], gpus)
+model = models.ReplicateModel(opt, \
+        nn.CrossEntropyLoss(), nn.KLDivLoss(), gpus)
 
 train_loaders = []
 val_loader, test_loader = None, None
@@ -108,6 +109,8 @@ def train(e):
 
     # xs = [Variable(th.randn(opt['b'],3,32,32).cuda(model.gidxs[i])) for i in xrange(opt['n'])]
     # ys = [Variable((th.rand(opt['b'],)*10).long().cuda(model.gidxs[i])) for i in xrange(opt['n'])]
+    #fs, errs = [None for i in xrange(opt['n'])], [None for i in xrange(opt['n'])]
+
     fs = [0 for i in xrange(opt['n'])]
     errs = [0 for i in xrange(opt['n'])]
 
@@ -119,10 +122,9 @@ def train(e):
                 xs, ys, yhs =   [None for i in xrange(opt['n'])], \
                                 [None for i in xrange(opt['n'])], \
                                 [None for i in xrange(opt['n'])]
-                #fs, errs = [None for i in xrange(opt['n'])], [None for i in xrange(opt['n'])]
 
+                x, y = next(train_loaders[0])
                 for i in xrange(opt['n']):
-                    x, y = next(train_loaders[i])
                     xs[i], ys[i] =  Variable(x.cuda(model.gidxs[i], async=True)), \
                             Variable(y.squeeze().cuda(model.gidxs[i], async=True))
 
@@ -132,7 +134,6 @@ def train(e):
                 return fs, errs
             return feval
 
-        #helper()()
         fs, errs = optimizer.step(helper(), model)
 
         f.update(np.mean(fs), bsz)

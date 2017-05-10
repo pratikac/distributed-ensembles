@@ -362,23 +362,30 @@ class ptbl(RNN):
 
 
 class ReplicateModel(nn.Module):
-    def __init__(self, m, crit, n, gidxs):
+    def __init__(self, opt, crit, crit_coupling, gidxs):
         super(ReplicateModel, self).__init__()
 
-        self.n = n
-        self.reference = deepcopy(m)
+        self.opt = deepcopy(opt)
+        self.n = opt['n']
+        n = self.n
+        self.reference = globals()[opt['m']](opt)
 
-        self.ensemble = [deepcopy(m) for i in xrange(n)]
+        self.ensemble = [globals()[opt['m']](opt) for i in xrange(n)]
         self.criteria = [deepcopy(crit) for i in xrange(n)]
+        self.criteria_coupling = [deepcopy(crit_coupling) for i in xrange(n)]
         self.gidxs = [gidxs[i%len(gidxs)] for i in xrange(n)]
 
         self.fs = [None for i in xrange(n)]
+        self.fklds = [None for i in xrange(n)]
+        self.ftots = [None for i in xrange(n)]
+
         self.errs = [None for i in xrange(n)]
 
         self.reference.cuda(self.gidxs[0])
         for i in xrange(self.n):
             self.ensemble[i].cuda(self.gidxs[i])
             self.criteria[i].cuda(self.gidxs[i])
+            self.criteria_coupling[i].cuda(self.gidxs[i])
 
     def forward(self, xs, ys):
         yhs = [None for i in xrange(self.n)]
@@ -392,11 +399,22 @@ class ReplicateModel(nn.Module):
             self.fs[i] = f
             self.errs[i] = 100.-prec1[0]
 
+        for i in xrange(self.n):
+            # copy all outputs on this GPU
+            yhsc = [Variable(yhs[j].data.clone().cuda(self.gidxs[i])) \
+                    for j in xrange(self.n) if j != i]
+            self.fklds[i] = sum([self.criteria_coupling[i](nn.LogSoftmax()(yhs[i]), nn.Softmax()(yhc)) \
+                    for yhc in yhsc])
+        #print [kld.data[0] for kld in self.fklds]
+
+        for i in xrange(self.n):
+            self.ftots[i] = self.fs[i] + self.opt['a0']*self.fklds[i]
+
         return self.fs, self.errs
 
     def backward(self):
         for i in xrange(self.n):
-            self.fs[i].backward()
+            self.ftots[i].backward()
 
     def train(self):
         self.reference.train()

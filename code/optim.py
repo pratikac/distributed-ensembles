@@ -306,6 +306,8 @@ class ElasticSGD(Optimizer):
 
             cmu.copy_(w[i])
             mu.add_(1/float(state['n']), cmu)
+
+        mu.copy_(w[0])
         for i in xrange(state['n']):
             crmu[i].copy_(mu)
 
@@ -321,7 +323,7 @@ class ElasticSGD(Optimizer):
 
         unflatten_params(model.reference, mu)
         for i in xrange(state['n']):
-            dw[i].add_(g, w[i]-crmu[i])
+            #dw[i].add_(g, w[i]-crmu[i])
 
             if mom > 0:
                 mdw[i].mul_(mom).add_(1-damp, dw[i])
