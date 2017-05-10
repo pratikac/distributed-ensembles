@@ -35,7 +35,8 @@ opt = add_args([
 ['--eps', 1e-4, 'sgld noise'],
 ['--g0', 1e-4, 'gamma'],
 ['--g1', 0.0, 'scoping'],
-['--a0', 1e-2, 'alpha, loss: f + alpha fkld'],
+['--a0', 0.0, 'alpha, loss: f + alpha fkld'],
+['--b0', 1.0, 'beta, dw = grad f + (1-b0)*w + g*b0*(w-mu)'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -71,13 +72,19 @@ model = models.ReplicateModel(opt, \
 train_loaders = []
 val_loader, test_loader = None, None
 for i in xrange(opt['n']):
-    tl, val_loader, test_loader = getattr(loader, opt['dataset'])(opt)
+    tl, val_loader, test_loader,_ = getattr(loader, opt['dataset'])(opt)
     train_loaders.append(tl)
+frac = opt['frac']
+
+opt['frac'] = 1.0
+_, _,_,train_loader_full = getattr(loader, opt['dataset'])(opt)
+opt['frac'] = frac
 
 optimizer = optim.ElasticSGD(model.ensemble[0].parameters(),
         config = dict(lr=opt['lr'], momentum=0.9, nesterov=True, weight_decay=opt['l2'],
-        L=opt['L'], eps=opt['eps'], g0=opt['g0'], g1=opt['g1'], verbose=opt['v'])
-        )
+        L=opt['L'], eps=opt['eps'], g0=opt['g0'], g1=opt['g1'], verbose=opt['v'],
+        b0 = opt['b0']
+        ))
 
 def schedule(e):
     if opt['lrs'] == '':
@@ -123,8 +130,9 @@ def train(e):
                                 [None for i in xrange(opt['n'])], \
                                 [None for i in xrange(opt['n'])]
 
-                x, y = next(train_loaders[0])
+                #x, y = next(train_loaders[0])
                 for i in xrange(opt['n']):
+                    x, y = next(train_loaders[i])
                     xs[i], ys[i] =  Variable(x.cuda(model.gidxs[i], async=True)), \
                             Variable(y.squeeze().cuda(model.gidxs[i], async=True))
 
@@ -175,9 +183,9 @@ def val(e):
     def dry_feed(m):
         m.train()
         cache = set_dropout(m)
-        maxb = len(train_loaders[0])
+        maxb = len(train_loader_full)
         for bi in xrange(maxb):
-            x,y = next(train_loaders[0])
+            x,y = next(train_loader_full)
             x,y =   Variable(x.cuda(0, async=True), volatile=True), \
                     Variable(y.squeeze().cuda(0, async=True), volatile=True)
             yh = m(x)
@@ -186,9 +194,28 @@ def val(e):
     dry_feed(model.reference)
     model.eval()
 
+    print((color('red', 'Full train:')))
+    for i in xrange(opt['n']):
+        maxb = len(train_loader_full)
+        f, top1 = AverageMeter(), AverageMeter()
+        for bi in xrange(maxb):
+            x,y = next(train_loader_full)
+            bsz = x.size(0)
+
+            x,y = Variable(x.cuda(gpus[model.gidxs[i]], async=True), volatile=True), \
+                Variable(y.squeeze().cuda(gpus[model.gidxs[i]], async=True), volatile=True)
+
+            yh = model.ensemble[i](x)
+            _f = nn.CrossEntropyLoss()(yh, y).data[0]
+            prec1, = accuracy(yh.data, y.data, topk=(1,))
+            err = 100. - prec1[0]
+            f.update(_f, bsz)
+            top1.update(err, bsz)
+        print((color('red', '++[%d][%2d] %2.4f %2.4f%%'))%(e, i, f.avg, top1.avg))
+
+    print((color('red', 'Full val:')))
     maxb = len(val_loader)
     f, top1 = AverageMeter(), AverageMeter()
-
     for bi in xrange(maxb):
         x,y = next(val_loader)
         bsz = x.size(0)
@@ -224,6 +251,17 @@ def val(e):
     print((color('red', '**[%2d] %2.4f %2.4f%%\n'))%(e, f.avg, top1.avg))
     print('')
 
+def save_ensemble():
+    loc = opt.get('o','/local2/pratikac/results')
+    for i in xrange(len(model.ensemble)):
+        d = model.ensemble[i].state_dict()
+        dr = []
+        for k in d:
+            dr.append(d[k].cpu().numpy().tolist())
+        json.dump(dr, open(os.path.join(loc, opt['m']+'_'+str(i)+'.json'), 'wb'))
+
 for e in xrange(opt['e'], opt['B']):
     train(e)
     val(e)
+    if e % 50 == 0 and e > 0:
+        save_ensemble()

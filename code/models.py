@@ -400,7 +400,8 @@ class ReplicateModel(nn.Module):
             self.errs[i] = 100.-prec1[0]
 
         for i in xrange(self.n):
-            # copy all outputs on this GPU
+            # copy all outputs on this GPU, evaluate the KLD between their individual softmax
+            # the weight KLD(log-softmax, softmax) form below is because pytorch likes it cooked that way
             yhsc = [Variable(yhs[j].data.clone().cuda(self.gidxs[i])) \
                     for j in xrange(self.n) if j != i]
             self.fklds[i] = sum([self.criteria_coupling[i](nn.LogSoftmax()(yhs[i]), nn.Softmax()(yhc)) \
@@ -408,7 +409,9 @@ class ReplicateModel(nn.Module):
         #print [kld.data[0] for kld in self.fklds]
 
         for i in xrange(self.n):
-            self.ftots[i] = self.fs[i] + self.opt['a0']*self.fklds[i]
+            self.ftots[i] = self.fs[i]
+            if self.opt['a0'] > 0:
+                self.ftots[i] += self.opt['a0']*self.fklds[i]/float(self.n)
 
         return self.fs, self.errs
 

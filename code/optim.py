@@ -243,7 +243,7 @@ class ElasticSGD(Optimizer):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0,
                 weight_decay=0, nesterov=True,
-                g0=1e-2, g1=0,
+                g0=1e-2, g1=0, b0 = 0.75,
                 verbose=False,
                 llr=0.1)
 
@@ -273,6 +273,7 @@ class ElasticSGD(Optimizer):
         verbose = c['verbose']
         g0 = c['g0']
         g1 = c['g1']
+        b0 = c['b0']
 
         if not 't' in state:
             state['t'] = 0
@@ -307,7 +308,10 @@ class ElasticSGD(Optimizer):
             cmu.copy_(w[i])
             mu.add_(1/float(state['n']), cmu)
 
-        mu.copy_(w[0])
+        # hack, when we want to use output coupling
+        if g0 < 1e-12:
+            mu.copy_(w[0])
+
         for i in xrange(state['n']):
             crmu[i].copy_(mu)
 
@@ -316,14 +320,16 @@ class ElasticSGD(Optimizer):
             debug['mu'] = mu.norm()
             for i in xrange(state['n']):
                 debug['dw'+str(i)] = dw[i].norm()
-                debug['dwmu'+str(i)] = (w[i]-crmu[i]).norm()
-                debug['ddwmu'+str(i)] = th.dot(dw[i],w[i]-crmu[i])/dw[i].norm()/((w[i]-crmu[i]).norm() + 1e-6)
+                debug['de'+str(i)] = (w[i]-crmu[i]).norm()
+                debug['ol'+str(i)] = th.dot(w[i], crmu[i])/w[i].norm()/(crmu[i].norm() + 1e-6)
+                debug['ddwmu'+str(i)] = th.dot(dw[i],w[i]-crmu[i])/(dw[i].norm()+1e-6)/((w[i]-crmu[i]).norm() + 1e-6)
             debug['g'] = g
             print {k : round(v, 5) for k,v in debug.items()}
 
         unflatten_params(model.reference, mu)
         for i in xrange(state['n']):
-            #dw[i].add_(g, w[i]-crmu[i])
+            #dw[i].add_(1-b0, w[i])
+            dw[i].add_(g*b0, w[i]-crmu[i])
 
             if mom > 0:
                 mdw[i].mul_(mom).add_(1-damp, dw[i])

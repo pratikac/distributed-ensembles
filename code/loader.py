@@ -78,9 +78,11 @@ def mnist(opt):
 
     train = sampler_t(opt['b'], d1.train_data.view(-1,1,28,28).float(),
         d1.train_labels, augment=opt['augment'], frac=frac)
+    train_linear = sampler_t(opt['b'], d1.train_data.view(-1,1,28,28).float(),
+        d1.train_labels, augment=opt['augment'], frac=frac, train=False)
     val = sampler_t(opt['b'], d2.test_data.view(-1,1,28,28).float(),
         d2.test_labels, train=False)
-    return train, val, val
+    return train, val, val, train_linear
 
 # def threaded_mnist(opt):
 #     frac = opt.get('frac', 1.0)
@@ -129,9 +131,11 @@ def cifar10(opt):
 
     train = sampler_t(opt['b'], th.from_numpy(d1['data']),
                      th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac)
+    train_linear = sampler_t(opt['b'], th.from_numpy(d1['data']),
+                 th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac, train=False)
     val = sampler_t(opt['b'], th.from_numpy(d2['data']),
                      th.from_numpy(d2['labels']), train=False)
-    return train, val, val
+    return train, val, val, train_linear
 
 def cifar100(opt):
     frac = opt.get('frac', 1.0)
