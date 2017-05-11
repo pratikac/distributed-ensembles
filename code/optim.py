@@ -218,6 +218,8 @@ class BSGD(Optimizer):
         flatten_params(model, state['wc'], state['dwc'])
 
         dw = state['dwc']
+        if wd > 0:
+            dw.add_(wd, state['wc'])
         if mom > 0:
             state['mdw'].mul_(mom).add_(1-damp, dw)
             if nesterov:
@@ -304,6 +306,8 @@ class ElasticSGD(Optimizer):
 
         for i in xrange(state['n']):
             flatten_params(model.ensemble[i], w[i], dw[i])
+            if wd > 0:
+                dw[i].add_(wd, w[i])
 
             cmu.copy_(w[i])
             mu.add_(1/float(state['n']), cmu)

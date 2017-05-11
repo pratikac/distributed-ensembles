@@ -33,7 +33,7 @@ opt = add_args([
 ['-n', 1, 'replicas'],
 ['-L', 0, 'sgld iterations'],
 ['--eps', 1e-4, 'sgld noise'],
-['--g0', 1e-4, 'gamma'],
+['--g0', 0.03, 'gamma'],
 ['--g1', 0.0, 'scoping'],
 ['--a0', 0.0, 'alpha, loss: f + alpha fkld'],
 ['--b0', 1.0, 'beta, dw = grad f + (1-b0)*w + g*b0*(w-mu)'],
@@ -191,9 +191,6 @@ def val(e):
             yh = m(x)
         set_dropout(m,cache)
 
-    dry_feed(model.reference)
-    model.eval()
-
     print((color('red', 'Full train:')))
     for i in xrange(opt['n']):
         maxb = len(train_loader_full)
@@ -212,6 +209,9 @@ def val(e):
             f.update(_f, bsz)
             top1.update(err, bsz)
         print((color('red', '++[%d][%2d] %2.4f %2.4f%%'))%(e, i, f.avg, top1.avg))
+
+    dry_feed(model.reference)
+    model.eval()
 
     print((color('red', 'Full val:')))
     maxb = len(val_loader)
