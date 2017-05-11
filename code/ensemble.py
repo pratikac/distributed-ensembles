@@ -37,6 +37,7 @@ opt = add_args([
 ['--g1', 0.0, 'scoping'],
 ['--a0', 0.0, 'alpha, loss: f + alpha fkld'],
 ['--b0', 1.0, 'beta, dw = grad f + (1-b0)*w + g*b0*(w-mu)'],
+['--beta', 0.1, 'temperature in dark knowledge'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -130,9 +131,9 @@ def train(e):
                                 [None for i in xrange(opt['n'])], \
                                 [None for i in xrange(opt['n'])]
 
-                #x, y = next(train_loaders[0])
+                x, y = next(train_loaders[0])
                 for i in xrange(opt['n']):
-                    x, y = next(train_loaders[i])
+                    #x, y = next(train_loaders[i])
                     xs[i], ys[i] =  Variable(x.cuda(model.gidxs[i], async=True)), \
                             Variable(y.squeeze().cuda(model.gidxs[i], async=True))
 
@@ -219,7 +220,6 @@ def val(e):
     for bi in xrange(maxb):
         x,y = next(val_loader)
         bsz = x.size(0)
-
         # xs, ys = [], []
         # for i in xrange(opt['n']):
 
@@ -252,6 +252,9 @@ def val(e):
     print('')
 
 def save_ensemble():
+    if not opt['save']:
+        return
+
     loc = opt.get('o','/local2/pratikac/results')
     for i in xrange(len(model.ensemble)):
         d = model.ensemble[i].state_dict()

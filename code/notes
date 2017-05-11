@@ -1,0 +1,5 @@
+n=6 with frac=0.5
+    train/test=4.5/8.8 @ 40 epochs
+        g0=0.03, g1=1e-4, and lr drops by 5 after every 10 epochs
+        only elastic coupling
+

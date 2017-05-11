@@ -4,6 +4,7 @@ from torch.autograd import Variable
 import math, logging, pdb
 from copy import deepcopy
 import exptutils
+import numpy as np
 
 class View(nn.Module):
     def __init__(self,o):
@@ -365,6 +366,7 @@ class ReplicateModel(nn.Module):
     def __init__(self, opt, crit, crit_coupling, gidxs):
         super(ReplicateModel, self).__init__()
 
+        self.t = 0
         self.opt = deepcopy(opt)
         self.n = opt['n']
         n = self.n
@@ -400,19 +402,27 @@ class ReplicateModel(nn.Module):
             self.errs[i] = 100.-prec1[0]
 
         for i in xrange(self.n):
-            # copy all outputs on this GPU, evaluate the KLD between their individual softmax
-            # the weight KLD(log-softmax, softmax) form below is because pytorch likes it cooked that way
-            yhsc = [Variable(yhs[j].data.clone().cuda(self.gidxs[i])) \
-                    for j in xrange(self.n) if j != i]
-            self.fklds[i] = sum([self.criteria_coupling[i](nn.LogSoftmax()(yhs[i]), nn.Softmax()(yhc)) \
-                    for yhc in yhsc])
-        #print [kld.data[0] for kld in self.fklds]
-
-        for i in xrange(self.n):
             self.ftots[i] = self.fs[i]
-            if self.opt['a0'] > 0:
+
+        if self.opt['a0'] > 0:
+            yhs_softmax = sum([nn.LogSoftmax()(yhs[i].cpu()*self.opt['beta']) \
+                        for i in xrange(self.n)])/float(self.n)
+            yhs_softmax = yhs_softmax.data
+            ensemble_avg = yhs_softmax.clone().zero_()
+            ensemble_avg.addcdiv_(1, yhs_softmax, yhs_softmax.sum(1).expand_as(yhs_softmax))
+
+            for i in xrange(self.n):
+                self.fklds[i] = self.criteria_coupling[i](
+                        nn.LogSoftmax()(yhs[i]), \
+                        Variable(ensemble_avg.clone().cuda(self.gidxs[i]))
+                        )
                 self.ftots[i] += self.opt['a0']*self.fklds[i]/float(self.n)
 
+            if self.opt['v'] and self.t % 25 == 0:
+                #print 'softmax: ', [round(ensemble_avg.mean(0).squeeze()[k], 3) for k in xrange(10)]
+                print 'KLD: ', [round(kld.data[0],5) for kld in self.fklds]
+
+        self.t += 1
         return self.fs, self.errs
 
     def backward(self):
