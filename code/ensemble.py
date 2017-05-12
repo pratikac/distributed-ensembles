@@ -81,10 +81,12 @@ opt['frac'] = 1.0
 _, _,_,train_loader_full = getattr(loader, opt['dataset'])(opt)
 opt['frac'] = frac
 
-optimizer = optim.ElasticSGD(model.ensemble[0].parameters(),
-        config = dict(lr=opt['lr'], momentum=0.9, nesterov=True, weight_decay=opt['l2'],
-        L=opt['L'], eps=opt['eps'], g0=opt['g0'], g1=opt['g1'], verbose=opt['v'],
-        b0 = opt['b0']
+optimizer = optim.DistributedESGD(config =
+        dict(lr=opt['lr'], momentum=0.9, nesterov=True, weight_decay=opt['l2'],
+            L=opt['L'], eps=opt['eps'],
+            g00=opt['g0'], g01=opt['g1'],
+            g10=opt['g0'], g11=opt['g1'],
+            verbose=opt['v']
         ))
 
 def schedule(e):
@@ -131,9 +133,9 @@ def train(e):
                                 [None for i in xrange(opt['n'])], \
                                 [None for i in xrange(opt['n'])]
 
-                x, y = next(train_loaders[0])
+                #x, y = next(train_loaders[0])
                 for i in xrange(opt['n']):
-                    #x, y = next(train_loaders[i])
+                    x, y = next(train_loaders[i])
                     xs[i], ys[i] =  Variable(x.cuda(model.gidxs[i], async=True)), \
                             Variable(y.squeeze().cuda(model.gidxs[i], async=True))
 

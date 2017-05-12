@@ -350,16 +350,17 @@ class DistributedESGD():
     def __init__(self, config = {}):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0,
-                weight_decay=0, nesterov=True,
+                weight_decay=0, nesterov=True, L=0,
                 g00=1e-2, g01=0,
                 g10=1e-2, g11=0,
                 verbose=False,
-                llr=0.1)
+                llr=0.1, eps=1e-4)
 
         for k in defaults:
             if config.get(k, None) is None:
                 config[k] = defaults[k]
         self.config = config
+        self.state = {}
 
     def step(self, closure=None, model=None):
         assert (closure is not None) and (model is not None), \
@@ -411,6 +412,7 @@ class DistributedESGD():
 
         state['t'] += 1
 
+        cache = state['cache']
         wc, w = state['wc'], cache['w']
         dwc, dw = state['dwc'], cache['dw']
         mw, mdw = cache['mw'], cache['mdw']
@@ -428,6 +430,8 @@ class DistributedESGD():
         for i in xrange(n):
             w[i].copy_(wc[i])
             mw[i].copy_(w[i])
+            mu.add_(w[i])
+        mu.mul_(1/float(n))
 
         def get_all_gradients():
             for i in xrange(n):
@@ -459,17 +463,27 @@ class DistributedESGD():
                 w[i].add_(-llr, dw[i])
                 mw[i].mul_(beta1).add_(1-beta1, w[i])
 
+                # update mu here itself
+                mu.mul_(beta1).add_(1-beta1, mw[i])
+            mu.mul_(1/float(n))
 
-        g = g10*(1+g11)**state['t']
+        # if verbose and state['t'] % 25 == 0:
+        #     debug = dict(dw=dw.norm(), dwc=state['dwc'].norm(),
+        #         dwdwc=th.dot(dw, state['dwc'])/dw.norm()/state['dwc'].norm(),
+        #         f=cf, g=g)
+        #     print {k : round(v, 5) for k,v in debug.items()}
+
         dw = state['dw']
         for i in xrange(n):
             dw[i].zero_()
 
+        g = g10*(1+g11)**state['t']
         for i in xrange(n):
             if L > 0:
                 dw[i].add_(wc[i]-mw[i])
             else:
                 dw[i].add_(dwc[i])
+            dw[i].add_(g, wc[i]-mu)
 
             if mom > 0:
                 state['mdw'][i].mul_(mom).add_(1-damp, dw[i])
@@ -480,5 +494,7 @@ class DistributedESGD():
 
             wc[i].add_(-lr, dw[i])
 
+            unflatten_params(model.ensemble[i], wc[i])
+        unflatten_params(model.reference, mu)
 
         return fs, errs
