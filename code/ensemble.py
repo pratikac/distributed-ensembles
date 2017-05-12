@@ -39,7 +39,7 @@ opt = add_args([
 ['--g11', 0.0, 'scoping elastic'],
 ['--a0', 0.0, 'alpha, loss: f + alpha fkld'],
 ['--b0', 1.0, 'beta, dw = grad f + (1-b0)*w + g*b0*(w-mu)'],
-['--beta', 0.1, 'temperature in dark knowledge'],
+['--beta', 0.5, 'temperature in dark knowledge'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -135,9 +135,11 @@ def train(e):
                                 [None for i in xrange(opt['n'])], \
                                 [None for i in xrange(opt['n'])]
 
-                #x, y = next(train_loaders[0])
+                if opt['a0'] > 0:
+                    x, y = next(train_loaders[0])
                 for i in xrange(opt['n']):
-                    x, y = next(train_loaders[i])
+                    if opt['a0'] < 1e-12:
+                        x, y = next(train_loaders[i])
                     xs[i], ys[i] =  Variable(x.cuda(model.gidxs[i], async=True)), \
                             Variable(y.squeeze().cuda(model.gidxs[i], async=True))
 
