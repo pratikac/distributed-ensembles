@@ -33,8 +33,10 @@ opt = add_args([
 ['-n', 1, 'replicas'],
 ['-L', 0, 'sgld iterations'],
 ['--eps', 1e-4, 'sgld noise'],
-['--g0', 0.03, 'gamma'],
-['--g1', 0.0, 'scoping'],
+['--g00', 0.03, 'gamma Langevin'],
+['--g01', 0.0, 'scoping Langevin'],
+['--g10', 0.03, 'gamma elastic'],
+['--g11', 0.0, 'scoping elastic'],
 ['--a0', 0.0, 'alpha, loss: f + alpha fkld'],
 ['--b0', 1.0, 'beta, dw = grad f + (1-b0)*w + g*b0*(w-mu)'],
 ['--beta', 0.1, 'temperature in dark knowledge'],
@@ -84,8 +86,8 @@ opt['frac'] = frac
 optimizer = optim.DistributedESGD(config =
         dict(lr=opt['lr'], momentum=0.9, nesterov=True, weight_decay=opt['l2'],
             L=opt['L'], eps=opt['eps'],
-            g00=opt['g0'], g01=opt['g1'],
-            g10=opt['g0'], g11=opt['g1'],
+            g00=opt['g00'], g01=opt['g01'],
+            g10=opt['g10'], g11=opt['g11'],
             verbose=opt['v']
         ))
 

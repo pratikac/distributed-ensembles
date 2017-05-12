@@ -441,12 +441,12 @@ class DistributedESGD():
                 if wd > 0:
                     dw[i].add_(wd, w[i])
 
-        g = g00*(1+g01)**state['t']
+        g0 = g00*(1+g01)**state['t']
         for l in xrange(L):
             get_all_gradients()
 
             for i in xrange(n):
-                dw[i].add_(g, w[i]-wc[i])
+                dw[i].add_(g0, w[i]-wc[i])
 
                 eta.normal_()
                 dw[i].add_(eps/np.sqrt(0.5*llr), eta)
@@ -469,13 +469,13 @@ class DistributedESGD():
         for i in xrange(n):
             dw[i].zero_()
 
-        g = g10*(1+g11)**state['t']
+        g1 = g10*(1+g11)**state['t']
         for i in xrange(n):
             if L > 0:
                 dw[i].add_(wc[i]-mw[i])
             else:
                 dw[i].add_(dwc[i])
-            dw[i].add_(g, wc[i]-mu)
+            dw[i].add_(g1, wc[i]-mu)
 
             if mom > 0:
                 state['mdw'][i].mul_(mom).add_(1-damp, dw[i])
@@ -498,7 +498,7 @@ class DistributedESGD():
                 debug = dict(dw=dw[i].norm(), dwc=dwc[i].norm(),
                     dwdwc=th.dot(dw[i], dwc[i])/(dw[i].norm()+1e-6)/(dwc[i].norm()+1e-6),
                     wmu=th.dot(wc[i], mu)/(wc[i].norm()+1e-6)/(mu.norm()+1e-6),
-                    g=g)
+                    g0=g0, g1=g1)
                 print 'R[%2d]'%i, {k : round(v, 5) for k,v in debug.items()}
 
         return fs, errs
