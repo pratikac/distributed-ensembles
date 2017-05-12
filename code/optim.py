@@ -245,7 +245,7 @@ class ElasticSGD(Optimizer):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0,
                 weight_decay=0, nesterov=True,
-                g0=1e-2, g1=0, b0 = 0.75,
+                g0=1e-2, g1=0,
                 verbose=False,
                 llr=0.1)
 
@@ -275,7 +275,6 @@ class ElasticSGD(Optimizer):
         verbose = c['verbose']
         g0 = c['g0']
         g1 = c['g1']
-        b0 = c['b0']
 
         if not 't' in state:
             state['t'] = 0
@@ -332,8 +331,7 @@ class ElasticSGD(Optimizer):
 
         unflatten_params(model.reference, mu)
         for i in xrange(state['n']):
-            #dw[i].add_(1-b0, w[i])
-            dw[i].add_(g*b0, w[i]-crmu[i])
+            dw[i].add_(g, w[i]-crmu[i])
 
             if mom > 0:
                 mdw[i].mul_(mom).add_(1-damp, dw[i])
@@ -353,20 +351,19 @@ class DistributedESGD():
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0,
                 weight_decay=0, nesterov=True,
-                g0=1e-2, g1=0, b0 = 0.75,
+                g00=1e-2, g01=0,
+                g10=1e-2, g11=0,
                 verbose=False,
                 llr=0.1)
 
         for k in defaults:
             if config.get(k, None) is None:
                 config[k] = defaults[k]
-
-        super(ElasticSGD, self).__init__(params, config)
         self.config = config
 
     def step(self, closure=None, model=None):
         assert (closure is not None) and (model is not None), \
-                'attach closure for ElasticSGD, replicated model'
+                'attach closure for DistributedESGD, replicated model'
 
         state = self.state
         c = self.config
@@ -375,83 +372,113 @@ class DistributedESGD():
             state['N'] = models.num_parameters(model.ensemble[0])
             state['n'] = len(model.ensemble)
 
+        n = state['n']
+
         lr = c['lr']
         mom = c['momentum']
         wd = c['weight_decay']
         damp = c['dampening']
         nesterov = c['nesterov']
         verbose = c['verbose']
-        g0 = c['g0']
-        g1 = c['g1']
-        b0 = c['b0']
+        L = c['L']
+        eps = c['eps']
+        g00 = c['g00']
+        g01 = c['g01']
+        g10 = c['g10']
+        g11 = c['g11']
+        verbose = c['verbose']
+        llr = c['llr']
+        beta1 = 0.75
 
         if not 't' in state:
             state['t'] = 0
             N = state['N']
             tmp = th.FloatTensor(N)
-            state['wc'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
-            state['dwc'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
-            state['mdw'] = [tmp.clone().cuda(model.gidxs[i]).zero_() for i in xrange(state['n'])]
+            state['wc'] = [tmp.clone() for i in xrange(state['n'])]
+            state['dw'] = [tmp.clone() for i in xrange(state['n'])]
+            state['dwc'] = [tmp.clone() for i in xrange(state['n'])]
+            state['mdw'] = [tmp.clone().zero_() for i in xrange(state['n'])]
 
-            state['mu'] = tmp.clone().cuda(0)
+            state['mu'] = tmp.clone()
+            state['eta'] = tmp.clone()
 
+            state['cache'] = {}
             cache = state['cache']
-            # copies of mu on each GPU
-            cache['mu'] = tmp.clone().cuda(0)
-            cache['rmu'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
+            for k in ['w', 'dw', 'mw', 'mdw']:
+                cache[k] = [tmp.clone() for i in xrange(state['n'])]
+            for i in xrange(n):
+                cache['mdw'][i].zero_()
 
         state['t'] += 1
-        g = g0*(1+g1)**state['t']
 
-        for i in xrange(state['n']):
+        wc, w = state['wc'], cache['w']
+        dwc, dw = state['dwc'], cache['dw']
+        mw, mdw = cache['mw'], cache['mdw']
+
+        eta = state['eta']
+        mu = state['mu'].zero_()
+
+        # store initial w,dw
+        for i in xrange(n):
             model.ensemble[i].zero_grad()
         fs, errs = closure()
+        for i in xrange(n):
+            flatten_params(model.ensemble[i], wc[i], dwc[i])
 
-        w = state['wc']
-        dw, mdw = state['dwc'], state['mdw']
-        mu = state['mu'].zero_()
-        cmu, crmu = state['cache']['mu'], state['cache']['rmu']
+        for i in xrange(n):
+            w[i].copy_(wc[i])
+            mw[i].copy_(w[i])
 
-        for i in xrange(state['n']):
-            flatten_params(model.ensemble[i], w[i], dw[i])
-            if wd > 0:
-                dw[i].add_(wd, w[i])
+        def get_all_gradients():
+            for i in xrange(n):
+                unflatten_params(model.ensemble[i], w[i])
+                model.ensemble[i].zero_grad()
+            tfs, terrs = closure()
+            for i in xrange(n):
+                flatten_params(model.ensemble[i], w[i], dw[i])
+                if wd > 0:
+                    dw[i].add_(wd, w[i])
 
-            cmu.copy_(w[i])
-            mu.add_(1/float(state['n']), cmu)
+        g = g00*(1+g01)**state['t']
+        for l in xrange(L):
+            get_all_gradients()
 
-        # hack, when we want to use output coupling
-        # if g0 < 1e-12:
-        #     mu.copy_(w[0])
+            for i in xrange(n):
+                dw[i].add_(g, w[i]-wc[i])
 
-        for i in xrange(state['n']):
-            crmu[i].copy_(mu)
+                eta.normal_()
+                dw[i].add_(eps/np.sqrt(0.5*llr), eta)
 
-        if verbose and state['t'] % 25 == 0:
-            debug = dict()
-            debug['mu'] = mu.norm()
-            for i in xrange(state['n']):
-                debug['dw'+str(i)] = dw[i].norm()
-                debug['de'+str(i)] = (w[i]-crmu[i]).norm()
-                debug['ol'+str(i)] = th.dot(w[i], crmu[i])/w[i].norm()/(crmu[i].norm() + 1e-6)
-                debug['ddwmu'+str(i)] = th.dot(dw[i],w[i]-crmu[i])/(dw[i].norm()+1e-6)/((w[i]-crmu[i]).norm() + 1e-6)
-            debug['g'] = g
-            print {k : round(v, 5) for k,v in debug.items()}
+                if mom > 0:
+                    mdw[i].mul_(mom).add_(1-damp, dw[i])
+                    if nesterov:
+                        dw[i].add_(mom, mdw[i])
+                    else:
+                        dw[i] = mdw[i]
 
-        unflatten_params(model.reference, mu)
-        for i in xrange(state['n']):
-            #dw[i].add_(1-b0, w[i])
-            dw[i].add_(g*b0, w[i]-crmu[i])
+                w[i].add_(-llr, dw[i])
+                mw[i].mul_(beta1).add_(1-beta1, w[i])
+
+
+        g = g10*(1+g11)**state['t']
+        dw = state['dw']
+        for i in xrange(n):
+            dw[i].zero_()
+
+        for i in xrange(n):
+            if L > 0:
+                dw[i].add_(wc[i]-mw[i])
+            else:
+                dw[i].add_(dwc[i])
 
             if mom > 0:
-                mdw[i].mul_(mom).add_(1-damp, dw[i])
+                state['mdw'][i].mul_(mom).add_(1-damp, dw[i])
                 if nesterov:
-                    dw[i].add_(mom, mdw[i])
+                    dw[i].add_(mom, state['mdw'][i])
                 else:
-                    dw[i] = mdw[i]
+                    dw[i] = state['mdw'][i]
 
-            w[i].add_(-lr, dw[i])
+            wc[i].add_(-lr, dw[i])
 
-            unflatten_params(model.ensemble[i], w[i])
 
         return fs, errs

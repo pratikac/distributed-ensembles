@@ -34,8 +34,8 @@ class mnistfc(nn.Module):
             nn.Dropout(opt['d']),
             nn.Linear(c,c),
             nn.ReLU(inplace=True),
-            nn.Dropout(opt['d']),
             nn.BatchNorm1d(c),
+            nn.Dropout(opt['d']),
             nn.Linear(c,10))
 
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
