@@ -395,18 +395,19 @@ class DistributedESGD():
             state['t'] = 0
             N = state['N']
             tmp = th.FloatTensor(N)
-            state['wc'] = [tmp.clone() for i in xrange(state['n'])]
-            state['dw'] = [tmp.clone() for i in xrange(state['n'])]
-            state['dwc'] = [tmp.clone() for i in xrange(state['n'])]
-            state['mdw'] = [tmp.clone().zero_() for i in xrange(state['n'])]
+            state['wc'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
+            state['dw'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
+            state['dwc'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
+            state['mdw'] = [tmp.clone().cuda(model.gidxs[i]).zero_() for i in xrange(state['n'])]
 
             state['mu'] = tmp.clone()
-            state['eta'] = tmp.clone()
+            state['rmu'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
+            state['eta'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
 
             state['cache'] = {}
             cache = state['cache']
             for k in ['w', 'dw', 'mw', 'mdw']:
-                cache[k] = [tmp.clone() for i in xrange(state['n'])]
+                cache[k] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
             for i in xrange(n):
                 cache['mdw'][i].zero_()
 
@@ -418,7 +419,10 @@ class DistributedESGD():
         mw, mdw = cache['mw'], cache['mdw']
 
         eta = state['eta']
+        rmu = state['rmu']
         mu = state['mu'].zero_()
+        for i in xrange(n):
+            rmu[i].zero_()
 
         # store initial w,dw
         for i in xrange(n):
@@ -433,8 +437,8 @@ class DistributedESGD():
 
         def get_all_gradients():
             for i in xrange(n):
-                unflatten_params(model.ensemble[i], w[i])
                 model.ensemble[i].zero_grad()
+                unflatten_params(model.ensemble[i], w[i])
             tfs, terrs = closure()
             for i in xrange(n):
                 flatten_params(model.ensemble[i], w[i], dw[i])
@@ -448,8 +452,8 @@ class DistributedESGD():
             for i in xrange(n):
                 dw[i].add_(g0, w[i]-wc[i])
 
-                eta.normal_()
-                dw[i].add_(eps/np.sqrt(0.5*llr), eta)
+                eta[i].normal_()
+                dw[i].add_(eps/np.sqrt(0.5*llr), eta[i])
 
                 if mom > 0:
                     mdw[i].mul_(mom).add_(1-damp, dw[i])
@@ -463,7 +467,9 @@ class DistributedESGD():
 
         mu.zero_()
         for i in xrange(n):
-            mu.add_(1/float(n), mw[i])
+            mu.add_(1/float(n), mw[i].cpu())
+        for i in xrange(n):
+            rmu[i].copy_(mu)
 
         dw = state['dw']
         for i in xrange(n):
@@ -475,7 +481,8 @@ class DistributedESGD():
                 dw[i].add_(wc[i]-mw[i])
             else:
                 dw[i].add_(dwc[i])
-            dw[i].add_(g1, wc[i]-mu)
+
+            dw[i].add_(g1, wc[i]-rmu[i])
 
             if mom > 0:
                 state['mdw'][i].mul_(mom).add_(1-damp, dw[i])
@@ -490,14 +497,14 @@ class DistributedESGD():
 
         mu.zero_()
         for i in xrange(n):
-            mu.add_(1/float(n), wc[i])
+            mu.add_(1/float(n), wc[i].cpu())
         unflatten_params(model.reference, mu)
 
         if verbose and state['t'] % 25 == 0:
             for i in xrange(n):
                 debug = dict(dw=dw[i].norm(), dwc=dwc[i].norm(),
                     dwdwc=th.dot(dw[i], dwc[i])/(dw[i].norm()+1e-6)/(dwc[i].norm()+1e-6),
-                    wmu=th.dot(wc[i], mu)/(wc[i].norm()+1e-6)/(mu.norm()+1e-6),
+                    wmu=th.dot(wc[i], rmu[i])/(wc[i].norm()+1e-6)/(rmu[i].norm()+1e-6),
                     g0=g0, g1=g1)
                 print 'R[%2d]'%i, {k : round(v, 5) for k,v in debug.items()}
 
