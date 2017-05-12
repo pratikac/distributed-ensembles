@@ -430,8 +430,6 @@ class DistributedESGD():
         for i in xrange(n):
             w[i].copy_(wc[i])
             mw[i].copy_(w[i])
-            mu.add_(w[i])
-        mu.mul_(1/float(n))
 
         def get_all_gradients():
             for i in xrange(n):
@@ -463,15 +461,9 @@ class DistributedESGD():
                 w[i].add_(-llr, dw[i])
                 mw[i].mul_(beta1).add_(1-beta1, w[i])
 
-                # update mu here itself
-                mu.mul_(beta1).add_(1-beta1, mw[i])
-            mu.mul_(1/float(n))
-
-        # if verbose and state['t'] % 25 == 0:
-        #     debug = dict(dw=dw.norm(), dwc=state['dwc'].norm(),
-        #         dwdwc=th.dot(dw, state['dwc'])/dw.norm()/state['dwc'].norm(),
-        #         f=cf, g=g)
-        #     print {k : round(v, 5) for k,v in debug.items()}
+        mu.zero_()
+        for i in xrange(n):
+            mu.add_(1/float(n), mw[i])
 
         dw = state['dw']
         for i in xrange(n):
@@ -495,6 +487,18 @@ class DistributedESGD():
             wc[i].add_(-lr, dw[i])
 
             unflatten_params(model.ensemble[i], wc[i])
+
+        mu.zero_()
+        for i in xrange(n):
+            mu.add_(1/float(n), wc[i])
         unflatten_params(model.reference, mu)
+
+        if verbose and state['t'] % 25 == 0:
+            for i in xrange(n):
+                debug = dict(dw=dw[i].norm(), dwc=dwc[i].norm(),
+                    dwdwc=th.dot(dw[i], dwc[i])/(dw[i].norm()+1e-6)/(dwc[i].norm()+1e-6),
+                    wmu=th.dot(wc[i], mu)/(wc[i].norm()+1e-6)/(mu.norm()+1e-6),
+                    g=g)
+                print 'R[%2d]'%i, {k : round(v, 5) for k,v in debug.items()}
 
         return fs, errs
