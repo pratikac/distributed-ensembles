@@ -1,3 +1,29 @@
+class small_mnistfc(nn.Module):
+    def __init__(self, opt):
+        super(small_mnistfc, self).__init__()
+        self.name = 'small_mnsitfc'
+
+        c = 500
+        opt['d'] = 0.
+        opt['l2'] = 0
+
+        self.m = nn.Sequential(
+            View(784),
+            nn.Linear(784,c),
+            nn.Hardtanh(),
+            nn.BatchNorm1d(c),
+            # nn.Linear(c,c),
+            # nn.Tanh(),
+            # nn.BatchNorm1d(c),
+            nn.Linear(c,10))
+
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
 class BSGD(Optimizer):
     def __init__(self, params, config = {}):
 

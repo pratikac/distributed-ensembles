@@ -333,10 +333,11 @@ class DistributedESGD():
 
         if verbose and state['t'] % 25 == 0:
             for i in xrange(n):
-                debug = dict(dw=dw[i].norm(), dwc=dwc[i].norm(),
+                debug = dict(dw=dw[i].norm(), dwc=dwc[i].norm(), de= g0*(wc[i]-rmu[i]).norm(),
                     dwdwc=th.dot(dw[i], dwc[i])/(dw[i].norm()+1e-6)/(dwc[i].norm()+1e-6),
                     wmu=th.dot(wc[i], rmu[i])/(wc[i].norm()+1e-6)/(rmu[i].norm()+1e-6),
                     g0=g0, g1=g1)
                 print 'R[%2d]'%i, {k : round(v, 5) for k,v in debug.items()}
 
+        fs, errs = closure()
         return fs, errs

@@ -37,7 +37,7 @@ opt = add_args([
 ['--g01', 0.0, 'scoping Langevin'],
 ['--g10', 0.03, 'gamma elastic'],
 ['--g11', 0.0, 'scoping elastic'],
-['--a0', 0.0, 'alpha, loss: f + alpha fkld'],
+['--alpha', 0.0, 'alpha, loss: f + alpha fkld'],
 ['--b0', 1.0, 'beta, dw = grad f + (1-b0)*w + g*b0*(w-mu)'],
 ['--beta', 0.5, 'temperature in dark knowledge'],
 ['-s', 42, 'seed'],
@@ -65,7 +65,7 @@ cudnn.benchmark = True
 build_filename(opt, blacklist=['lrs','retrain','step', \
                             'f','v','dataset', 'augment', 'd', 't',
                             'depth', 'widen','save','e','validate','l2','eps',
-                            'validate_ensemble'])
+                            'validate_ensemble', 'alpha'])
 logger = create_logger(opt)
 pprint(opt)
 
@@ -74,14 +74,10 @@ model = models.ReplicateModel(opt, \
 
 train_loaders = []
 val_loader, test_loader = None, None
+train_loader_full = None
 for i in xrange(opt['n']):
-    tl, val_loader, test_loader,_ = getattr(loader, opt['dataset'])(opt)
+    tl, val_loader, test_loader,train_loader_full = getattr(loader, opt['dataset'])(opt)
     train_loaders.append(tl)
-frac = opt['frac']
-
-opt['frac'] = 1.0
-_, _,_,train_loader_full = getattr(loader, opt['dataset'])(opt)
-opt['frac'] = frac
 
 optimizer = optim.DistributedESGD(config =
         dict(lr=opt['lr'], momentum=0.9, nesterov=True, weight_decay=opt['l2'],
@@ -114,6 +110,7 @@ def train(e):
     model.train()
 
     f, top1, dt = AverageMeter(), AverageMeter(), AverageMeter()
+    fstd, top1std = AverageMeter(), AverageMeter()
 
     bsz = opt['b']
     maxb = len(train_loaders[0])
@@ -135,10 +132,10 @@ def train(e):
                                 [None for i in xrange(opt['n'])], \
                                 [None for i in xrange(opt['n'])]
 
-                if opt['a0'] > 0:
-                    x, y = next(train_loaders[0])
+                # if opt['alpha'] > 0:
+                #     x, y = next(train_loaders[0])
                 for i in xrange(opt['n']):
-                    if opt['a0'] < 1e-12:
+                    if opt['alpha'] < 1e-6:
                         x, y = next(train_loaders[i])
                     xs[i], ys[i] =  Variable(x.cuda(model.gidxs[i], async=True)), \
                             Variable(y.squeeze().cuda(model.gidxs[i], async=True))
@@ -152,16 +149,19 @@ def train(e):
         fs, errs = optimizer.step(helper(), model)
 
         f.update(np.mean(fs), bsz)
+        fstd.update(np.std(fs), bsz)
+
         top1.update(np.mean(errs), bsz)
+        top1std.update(np.std(errs), bsz)
         dt.update(timer()-_dt, 1)
 
         if opt['l']:
-            s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), top1=np.mean(errs))
+            s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), top1=np.mean(errs), fstd=np.std(fs), top1std=np.std(errs))
             logger.info('[LOG] ' + json.dumps(s))
 
         if bi % 25 == 0:
-            print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f %2.2f%%'))%(dt.avg, e,bi,maxb,
-                f.avg, top1.avg))
+            print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f%%'))%(dt.avg, e,bi,maxb,
+                f.avg, fstd.avg, top1.avg, top1std.avg))
 
     if opt['l']:
         s = dict(e=e, i=0, f=f.avg, top1=top1.avg, train=True)

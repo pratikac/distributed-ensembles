@@ -46,32 +46,6 @@ class mnistfc(nn.Module):
     def forward(self, x):
         return self.m(x)
 
-class small_mnistfc(nn.Module):
-    def __init__(self, opt):
-        super(small_mnistfc, self).__init__()
-        self.name = 'small_mnsitfc'
-
-        c = 500
-        opt['d'] = 0.
-        opt['l2'] = 0
-
-        self.m = nn.Sequential(
-            View(784),
-            nn.Linear(784,c),
-            nn.Hardtanh(),
-            nn.BatchNorm1d(c),
-            # nn.Linear(c,c),
-            # nn.Tanh(),
-            # nn.BatchNorm1d(c),
-            nn.Linear(c,10))
-
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
-        print(s)
-        logging.info(s)
-
-    def forward(self, x):
-        return self.m(x)
-
 class lenet(nn.Module):
     def __init__(self, opt):
         super(lenet, self).__init__()
@@ -404,7 +378,7 @@ class ReplicateModel(nn.Module):
         for i in xrange(self.n):
             self.ftots[i] = self.fs[i]
 
-        if self.opt['a0'] > 0:
+        if self.opt['alpha'] > 0:
             yhs_softmax = sum([nn.LogSoftmax()(yhs[i].cpu()*self.opt['beta']) \
                         for i in xrange(self.n)])/float(self.n)
             yhs_softmax = yhs_softmax.data
@@ -416,9 +390,10 @@ class ReplicateModel(nn.Module):
                         nn.LogSoftmax()(yhs[i]), \
                         Variable(ensemble_avg.clone().cuda(self.gidxs[i]))
                         )
-                self.ftots[i] += self.opt['a0']*self.fklds[i]/float(self.n)
+                self.ftots[i] += self.opt['alpha']*self.fklds[i]/float(self.n)
 
-            if self.opt['v'] and self.t % 25 == 0:
+            freq = 25 if self.opt['L'] == 0 else 25*self.opt['L']
+            if self.opt['v'] and self.t % freq == 0:
                 #print 'softmax: ', [round(ensemble_avg.mean(0).squeeze()[k], 3) for k in xrange(10)]
                 print 'KLD: ', [round(kld.data[0],5) for kld in self.fklds]
 

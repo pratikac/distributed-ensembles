@@ -7,7 +7,8 @@ import os, sys, pdb, math, random
 import cv2
 
 class sampler_t:
-    def __init__(self, batch_size, x,y, train=True, augment=False, frac=1.0):
+    def __init__(self, batch_size, x,y, train=True, augment=False,
+            frac=1.0):
         self.n = x.size(0)
         self.x, self.y = x.pin_memory(), y.pin_memory()
 
@@ -78,11 +79,11 @@ def mnist(opt):
 
     train = sampler_t(opt['b'], d1.train_data.view(-1,1,28,28).float(),
         d1.train_labels, augment=opt['augment'], frac=frac)
-    train_linear = sampler_t(opt['b'], d1.train_data.view(-1,1,28,28).float(),
-        d1.train_labels, augment=opt['augment'], frac=frac, train=False)
+    train_full = sampler_t(opt['b'], d1.train_data.view(-1,1,28,28).float(),
+        d1.train_labels, augment=opt['augment'], frac=1.0, train=False)
     val = sampler_t(opt['b'], d2.test_data.view(-1,1,28,28).float(),
         d2.test_labels, train=False)
-    return train, val, val, train_linear
+    return train, val, val, train_full
 
 # def threaded_mnist(opt):
 #     frac = opt.get('frac', 1.0)
@@ -131,11 +132,11 @@ def cifar10(opt):
 
     train = sampler_t(opt['b'], th.from_numpy(d1['data']),
                      th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac)
-    train_linear = sampler_t(opt['b'], th.from_numpy(d1['data']),
-                 th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac, train=False)
+    train_full = sampler_t(opt['b'], th.from_numpy(d1['data']),
+                 th.from_numpy(d1['labels']), augment=opt['augment'], frac=1.0, train=False)
     val = sampler_t(opt['b'], th.from_numpy(d2['data']),
                      th.from_numpy(d2['labels']), train=False)
-    return train, val, val, train_linear
+    return train, val, val, train_full
 
 def cifar100(opt):
     frac = opt.get('frac', 1.0)
