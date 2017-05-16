@@ -63,7 +63,7 @@ th.cuda.manual_seed_all(opt['s'])
 cudnn.benchmark = True
 
 model = getattr(models, opt['m'])(opt)
-train_loader, val_loader, test_loader = getattr(loader, opt['dataset'])(opt)
+train_loader, val_loader, test_loader,_ = getattr(loader, opt['dataset'])(opt)
 if opt['g'] > 2:
     model = th.nn.DataParallel(model)
 model = model.cuda()
@@ -129,6 +129,10 @@ def train(e):
                 yh = model(x)
                 f = criterion.forward(yh, y)
 
+                # if opt['v'] and bi % 100 == 0:
+                #     print(yh.data[:2])
+                #     print(y.data[:2])
+
                 if bprop:
                     f.backward()
 
@@ -180,7 +184,7 @@ def dry_feed(model):
     for bi in xrange(maxb):
         x,y = next(train_loader)
         x,y =   Variable(x.cuda(async=True), volatile=True), \
-                Variable(y.squeeze(async=True).cuda(), volatile=True)
+                Variable(y.squeeze().cuda(async=True), volatile=True)
         yh = model(x)
     set_dropout(cache)
 
@@ -195,7 +199,7 @@ def val(e, data_loader):
         bsz = x.size(0)
 
         x,y =   Variable(x.cuda(async=True), volatile=True), \
-                Variable(y.squeeze(async=True).cuda(), volatile=True)
+                Variable(y.squeeze().cuda(async=True), volatile=True)
         yh = model(x)
 
         f = criterion.forward(yh, y).data[0]

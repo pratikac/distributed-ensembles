@@ -46,6 +46,40 @@ class mnistfc(nn.Module):
     def forward(self, x):
         return self.m(x)
 
+class small_mnistfc(nn.Module):
+    def __init__(self, opt):
+        super(small_mnistfc, self).__init__()
+        self.name = 'small_mnsitfc'
+
+        c = 400
+        opt['d'] = 0.0
+        opt['l2'] = opt['l2']
+
+        self.m = nn.Sequential(
+            View(784),
+            nn.Dropout(0.2),
+            nn.Linear(784,c),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm1d(c),
+            nn.Dropout(opt['d']),
+            nn.Linear(c,c),
+            nn.ReLU(inplace=True),
+            nn.BatchNorm1d(c),
+            nn.Dropout(opt['d']),
+            # nn.Linear(c,c),
+            # nn.ReLU(inplace=True),
+            # nn.BatchNorm1d(c),
+            # nn.Dropout(opt['d']),
+            nn.Linear(c,10))
+
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+
 class lenet(nn.Module):
     def __init__(self, opt):
         super(lenet, self).__init__()
@@ -115,49 +149,12 @@ class rotlenet(nn.Module):
         return self.m(x)
 
 
-class tfnet(nn.Module):
-    def __init__(self, opt):
-        super(tfnet, self).__init__()
-        self.name = 'tfnet'
-        opt['l2'] = 1e-3
-        opt['d'] = 0.5
-
-        def convbn(ci,co,ksz,psz,p=0):
-            return nn.Sequential(
-                nn.Conv2d(ci,co,ksz),
-                nn.ReLU(True),
-                nn.MaxPool2d(psz,stride=psz),
-                nn.BatchNorm2d(co),
-                nn.Dropout(p))
-
-        c1, c2 = 64,128
-        self.m = nn.Sequential(
-            convbn(3,c1,5,3,opt['d']),
-            convbn(c1,c2,5,3,opt['d']),
-            View(c2*1*1),
-            nn.Linear(c2*1*1, 384),
-            nn.BatchNorm1d(384),
-            nn.ReLU(True),
-            nn.Dropout(opt['d']),
-            nn.Linear(384,192),
-            nn.BatchNorm1d(192),
-            nn.ReLU(True),
-            nn.Dropout(opt['d']),
-            nn.Linear(192,10))
-
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
-        print(s)
-        logging.info(s)
-
-    def forward(self, x):
-        return self.m(x)
-
 class allcnn(nn.Module):
-    def __init__(self, opt = {'d':0.5}, c1=96, c2= 192):
+    def __init__(self, opt = {'d':0.5}, c1=32, c2=64):
         super(allcnn, self).__init__()
         self.name = 'allcnn'
 
-        opt['d'] = 0.5
+        opt['d'] = 0.25
         opt['l2'] = 1e-3
 
         if opt['dataset'] == 'cifar10':
