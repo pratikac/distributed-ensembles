@@ -19,7 +19,7 @@ from copy import deepcopy
 opt = add_args([
 ['-o', '/local2/pratikac/results', 'output'],
 ['-m', 'lenet', 'lenet | mnistfc | allcnn | wideresnet'],
-['--optim', 'SGD', 'ESGD | HJB | SGLD | SGD | HEAT'],
+['--optim', 'DistributedESGD', 'DistributedESGD'],
 ['--dataset', 'mnist', 'mnist | rotmnist | cifar10 | cifar100'],
 ['--frac', 1.0, 'fraction of dataset'],
 ['-b', 128, 'batch_size'],
@@ -79,7 +79,7 @@ for i in xrange(opt['n']):
     tl, val_loader, test_loader,train_loader_full = getattr(loader, opt['dataset'])(opt)
     train_loaders.append(tl)
 
-optimizer = optim.DistributedESGD(config =
+optimizer = getattr(optim, opt['optim'])(config =
         dict(lr=opt['lr'], momentum=0.9, nesterov=True, weight_decay=opt['l2'],
             L=opt['L'], eps=opt['eps'],
             g00=opt['g00'], g01=opt['g01'],

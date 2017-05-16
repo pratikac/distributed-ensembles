@@ -19,7 +19,7 @@ from copy import deepcopy
 opt = add_args([
 ['-o', '/local2/pratikac/results', 'output'],
 ['-m', 'lenet', 'lenet | mnistfc | allcnn | wideresnet'],
-['--optim', 'SGD', 'ESGD | HJB | SGLD | SGD | HEAT'],
+['--optim', 'SGD', 'ESGD | SGD'],
 ['--dataset', 'mnist', 'mnist | rotmnist | cifar10 | cifar100'],
 ['--frac', 1.0, 'fraction of dataset'],
 ['-b', 128, 'batch_size'],
@@ -128,6 +128,7 @@ def train(e):
                 optimizer.zero_grad()
                 yh = model(x)
                 f = criterion.forward(yh, y)
+
                 if bprop:
                     f.backward()
 
