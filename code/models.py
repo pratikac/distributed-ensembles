@@ -150,11 +150,11 @@ class rotlenet(nn.Module):
 
 
 class allcnn(nn.Module):
-    def __init__(self, opt = {'d':0.5}, c1=32, c2=64):
+    def __init__(self, opt = {'d':0.5}, c1=96, c2=192):
         super(allcnn, self).__init__()
         self.name = 'allcnn'
 
-        opt['d'] = 0.25
+        opt['d'] = 0.5
         opt['l2'] = 1e-3
 
         if opt['dataset'] == 'cifar10':

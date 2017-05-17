@@ -272,5 +272,5 @@ def save_ensemble():
 for e in xrange(opt['e'], opt['B']):
     train(e)
     val(e)
-    if e % 50 == 0 and e > 0:
+    if e % 5 == 0 and e > 0:
         save_ensemble()
