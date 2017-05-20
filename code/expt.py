@@ -45,16 +45,17 @@ import pdb
 #         return o
 
 
-b = 1024
-m = allcnn(dict(dataset='cifar10'))
-mr = ReplicateModel(m, 3, [0,1,2])
+# b = 1024
+# m = allcnn(dict(dataset='cifar10'))
+# mr = ReplicateModel(m, 3, [0,1,2])
 
-for e in xrange(1000):
-    xs = [Variable(th.randn(b,3,32,32).cuda(i)) for i in xrange(3)]
-    ys = [Variable((th.rand(b,)*10).long().cuda(i)) for i in xrange(3)]
-    crits = [nn.CrossEntropyLoss().cuda(i) for i in xrange(3)]
+# for e in xrange(1000):
+#     xs = [Variable(th.randn(b,3,32,32).cuda(i)) for i in xrange(3)]
+#     ys = [Variable((th.rand(b,)*10).long().cuda(i)) for i in xrange(3)]
+#     crits = [nn.CrossEntropyLoss().cuda(i) for i in xrange(3)]
 
-    yhs = mr(xs)
-    fs = [crits[i](yhs[i], ys[i]) for i in xrange(3)]
-    for i in xrange(3):
-        fs[i].backward()
+#     yhs = mr(xs)
+#     fs = [crits[i](yhs[i], ys[i]) for i in xrange(3)]
+#     for i in xrange(3):
+#         fs[i].backward()
+

@@ -126,6 +126,7 @@ def train(e):
                 bsz = x.size(0)
 
                 optimizer.zero_grad()
+                model.zero_grad()
                 yh = model(x)
                 f = criterion.forward(yh, y)
 

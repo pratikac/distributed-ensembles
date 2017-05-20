@@ -263,12 +263,12 @@ def save_ensemble():
 
     loc = opt.get('o','/local2/pratikac/results')
     for i in xrange(len(model.ensemble)):
-        d = model.ensemble[i].state_dict()
-        dr = []
-        for k in d:
-            dr.append(d[k].cpu().numpy().tolist())
+        dr = deepcopy(model.ensemble[i].state_dict())
+        for k in dr:
+            dr[k] = dr[k].cpu().numpy().tolist()
         json.dump(dr, open(os.path.join(loc, opt['m']+'_'+str(i)+'.json'), 'wb'))
 
+save_ensemble()
 for e in xrange(opt['e'], opt['B']):
     train(e)
     val(e)
