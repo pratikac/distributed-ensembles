@@ -73,7 +73,7 @@ cifar_mean = np.array([125.3, 123.0, 113.9])[None,:,None,None]
 cifar_std = np.array([63.0, 62.1, 66.7])[None,:,None,None]
 
 def proc():
-    def _load_batch(fn):        
+    def _load_batch(fn):
         fo = open(fn, 'rb')
         d = pickle.load(fo)
         fo.close()
@@ -113,7 +113,7 @@ def proc():
     txf, vxf = tx.reshape(tx.shape[0], -1).T, vx.reshape(vx.shape[0], -1).T
 
     print '[PCA]'
-    pca = PCA(D=txf, n_components=txf.shape[1])    
+    pca = PCA(D=txf, n_components=txf.shape[1])
     tx = pca.transform(D=txf, whiten=True, ZCA=True).T.reshape(tx.shape)
     vx = pca.transform(D=vxf, whiten=True, ZCA=True).T.reshape(vx.shape)
 
