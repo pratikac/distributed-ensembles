@@ -1,5 +1,6 @@
 import torch as th
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.autograd import Variable
 import math, logging, pdb
 from copy import deepcopy
@@ -214,9 +215,9 @@ class wideresnet(nn.Module):
         super(wideresnet, self).__init__()
         self.name = 'wideresnet'
 
-        opt['d'] = 0.25
-        opt['depth'] = 28
-        opt['widen'] = 10
+        opt['d'] = 0.
+        opt['depth'] = 40
+        opt['widen'] = 4
         opt['l2'] = 5e-4
         d, depth, widen = opt['d'], opt['depth'], opt['widen']
 
@@ -230,21 +231,22 @@ class wideresnet(nn.Module):
         n = (depth-4)/6
 
         def block(ci, co, s, p=0.):
+            m = nn.Sequential(
+                            nn.BatchNorm2d(ci),
+                            nn.ReLU(inplace=True))
             h = nn.Sequential(
-                    nn.BatchNorm2d(ci),
-                    nn.ReLU(inplace=True),
+                    m,
                     nn.Conv2d(ci, co, kernel_size=3, stride=s, padding=1, bias=False),
                     nn.BatchNorm2d(co),
                     nn.ReLU(inplace=True),
                     nn.Dropout(p),
                     nn.Conv2d(co, co, kernel_size=3, stride=1, padding=1, bias=False))
-            m = nn.Sequential()
-            if not ci == co:
-                m = nn.Sequential(
-                            nn.BatchNorm2d(ci),
-                            nn.ReLU(inplace=True),
+            if ci == co:
+                return caddtable_t(h, nn.Sequential())
+            else:
+                return caddtable_t(h, nn.Sequential(m,
                             nn.Conv2d(ci, co, kernel_size=1, stride=s, padding=0, bias=False))
-            return caddtable_t(h, m)
+                        )
 
         def netblock(nl, ci, co, blk, s, p=0.):
             ls = [blk(i==0 and ci or co, co, i==0 and s or 1, p) for i in xrange(nl)]
@@ -278,6 +280,7 @@ class wideresnet(nn.Module):
 
     def forward(self, x):
         return self.m(x)
+
 
 class RNN(nn.Module):
     """Container module with an encoder, a recurrent module, and a decoder."""
