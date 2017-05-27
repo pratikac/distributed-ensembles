@@ -207,14 +207,14 @@ class caddtable_t(nn.Module):
         self.m1, self.m2 = m1, m2
 
     def forward(self, x):
-        return self.m1(x) + self.m2(x)
+        return th.add(self.m1(x), self.m2(x))
 
 class wideresnet(nn.Module):
     def __init__(self, opt = {'d':0., 'depth':28, 'widen':10}):
         super(wideresnet, self).__init__()
         self.name = 'wideresnet'
 
-        opt['d'] = 0.
+        opt['d'] = 0.25
         opt['depth'] = 28
         opt['widen'] = 10
         opt['l2'] = 5e-4
@@ -231,17 +231,20 @@ class wideresnet(nn.Module):
 
         def block(ci, co, s, p=0.):
             h = nn.Sequential(
-                    nn.Sequential(nn.BatchNorm2d(ci),
-                    nn.ReLU(inplace=True)),
+                    nn.BatchNorm2d(ci),
+                    nn.ReLU(inplace=True),
                     nn.Conv2d(ci, co, kernel_size=3, stride=s, padding=1, bias=False),
                     nn.BatchNorm2d(co),
                     nn.ReLU(inplace=True),
+                    nn.Dropout(p),
                     nn.Conv2d(co, co, kernel_size=3, stride=1, padding=1, bias=False))
-            if ci == co:
-                return caddtable_t(h, nn.Sequential())
-            else:
-                return caddtable_t(h,
-                        nn.Conv2d(ci, co, kernel_size=1, stride=s, padding=0, bias=False))
+            m = nn.Sequential()
+            if not ci == co:
+                m = nn.Sequential(
+                            nn.BatchNorm2d(ci),
+                            nn.ReLU(inplace=True),
+                            nn.Conv2d(ci, co, kernel_size=1, stride=s, padding=0, bias=False))
+            return caddtable_t(h, m)
 
         def netblock(nl, ci, co, blk, s, p=0.):
             ls = [blk(i==0 and ci or co, co, i==0 and s or 1, p) for i in xrange(nl)]
