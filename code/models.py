@@ -220,22 +220,19 @@ class caddtable_t(nn.Module):
 class wideresnet(nn.Module):
     @staticmethod
     def block(ci, co, s, p=0.):
-        m = nn.Sequential(
-                nn.BatchNorm2d(ci),
-                nn.ReLU(inplace=True))
         h = nn.Sequential(
+                nn.BatchNorm2d(ci),
+                nn.ReLU(inplace=True),
                 nn.Conv2d(ci, co, kernel_size=3, stride=s, padding=1, bias=False),
                 nn.BatchNorm2d(co),
                 nn.ReLU(inplace=True),
                 nn.Dropout(p),
                 nn.Conv2d(co, co, kernel_size=3, stride=1, padding=1, bias=False))
         if ci == co:
-            return caddtable_t(nn.Sequential(m,h), nn.Sequential())
+            return caddtable_t(h, nn.Sequential())
         else:
-            return nn.Sequential(
-                    m,
-                    caddtable_t(h,
-                        nn.Conv2d(ci, co, kernel_size=1, stride=s, padding=0, bias=False)))
+            return caddtable_t(h,
+                        nn.Conv2d(ci, co, kernel_size=1, stride=s, padding=0, bias=False))
 
     @staticmethod
     def netblock(nl, ci, co, blk, s, p=0.):

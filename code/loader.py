@@ -33,11 +33,10 @@ class sampler_t:
 
             if self.augment:
                 p = 4
-                r = np.random.randint(0, 1, self.b)
                 x = x.numpy().transpose(0,2,3,1)
                 sz = x.shape[1]
                 for i in xrange(self.b):
-                    if r[i] == 1:
+                    if np.random.random() < 0.5:
                         x[i] = cv2.flip(x[i],1)
 
                     # pad using reflect to preserve color
