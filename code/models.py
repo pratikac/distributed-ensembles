@@ -14,6 +14,13 @@ class View(nn.Module):
     def forward(self,x):
         return x.view(-1, self.o)
 
+class Identity(nn.Module):
+    def __init__(self):
+        super(Identity, self).__init__()
+
+    def forward(self, x):
+        return x
+
 def num_parameters(model):
     return sum([w.numel() for w in model.parameters()])
 
@@ -211,13 +218,37 @@ class caddtable_t(nn.Module):
         return th.add(self.m1(x), self.m2(x))
 
 class wideresnet(nn.Module):
+    @staticmethod
+    def block(ci, co, s, p=0.):
+        m = nn.Sequential(
+                nn.BatchNorm2d(ci),
+                nn.ReLU(inplace=True))
+        h = nn.Sequential(
+                nn.Conv2d(ci, co, kernel_size=3, stride=s, padding=1, bias=False),
+                nn.BatchNorm2d(co),
+                nn.ReLU(inplace=True),
+                nn.Dropout(p),
+                nn.Conv2d(co, co, kernel_size=3, stride=1, padding=1, bias=False))
+        if ci == co:
+            return caddtable_t(nn.Sequential(m,h), nn.Sequential())
+        else:
+            return nn.Sequential(
+                    m,
+                    caddtable_t(h,
+                        nn.Conv2d(ci, co, kernel_size=1, stride=s, padding=0, bias=False)))
+
+    @staticmethod
+    def netblock(nl, ci, co, blk, s, p=0.):
+        ls = [blk(i==0 and ci or co, co, i==0 and s or 1, p) for i in xrange(nl)]
+        return nn.Sequential(*ls)
+
     def __init__(self, opt = {'d':0., 'depth':28, 'widen':10}):
         super(wideresnet, self).__init__()
         self.name = 'wideresnet'
 
         opt['d'] = 0.
-        opt['depth'] = 40
-        opt['widen'] = 4
+        opt['depth'] = 28
+        opt['widen'] = 10
         opt['l2'] = 5e-4
         d, depth, widen = opt['d'], opt['depth'], opt['widen']
 
@@ -230,33 +261,11 @@ class wideresnet(nn.Module):
         assert (depth-4)%6 == 0, 'Incorrect depth'
         n = (depth-4)/6
 
-        def block(ci, co, s, p=0.):
-            m = nn.Sequential(
-                            nn.BatchNorm2d(ci),
-                            nn.ReLU(inplace=True))
-            h = nn.Sequential(
-                    m,
-                    nn.Conv2d(ci, co, kernel_size=3, stride=s, padding=1, bias=False),
-                    nn.BatchNorm2d(co),
-                    nn.ReLU(inplace=True),
-                    nn.Dropout(p),
-                    nn.Conv2d(co, co, kernel_size=3, stride=1, padding=1, bias=False))
-            if ci == co:
-                return caddtable_t(h, nn.Sequential())
-            else:
-                return caddtable_t(h, nn.Sequential(m,
-                            nn.Conv2d(ci, co, kernel_size=1, stride=s, padding=0, bias=False))
-                        )
-
-        def netblock(nl, ci, co, blk, s, p=0.):
-            ls = [blk(i==0 and ci or co, co, i==0 and s or 1, p) for i in xrange(nl)]
-            return nn.Sequential(*ls)
-
         self.m = nn.Sequential(
                 nn.Conv2d(3, nc[0], kernel_size=3, stride=1, padding=1, bias=False),
-                netblock(n, nc[0], nc[1], block, 1, d),
-                netblock(n, nc[1], nc[2], block, 2, d),
-                netblock(n, nc[2], nc[3], block, 2, d),
+                self.netblock(n, nc[0], nc[1], self.block, 1, d),
+                self.netblock(n, nc[1], nc[2], self.block, 2, d),
+                self.netblock(n, nc[2], nc[3], self.block, 2, d),
                 nn.BatchNorm2d(nc[3]),
                 nn.ReLU(inplace=True),
                 nn.AvgPool2d(8),
@@ -268,10 +277,10 @@ class wideresnet(nn.Module):
                 n = m.kernel_size[0]*m.kernel_size[1]*m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2./n))
             elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.uniform_()
+                m.weight.data.fill_(1)
                 m.bias.data.zero_()
             elif isinstance(m, nn.Linear):
-                m.weight.data.normal_(0, math.sqrt(2./m.in_features))
+                #m.weight.data.normal_(0, math.sqrt(2./m.in_features))
                 m.bias.data.zero_()
 
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))

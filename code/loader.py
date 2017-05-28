@@ -38,7 +38,7 @@ class sampler_t:
                 sz = x.shape[1]
                 for i in xrange(self.b):
                     if r[i] == 1:
-                        x[i] = np.fliplr(x[i])
+                        x[i] = cv2.flip(x[i],1)
 
                     # pad using reflect to preserve color
                     res = cv2.copyMakeBorder(x[i], p,p,p,p,
@@ -104,6 +104,7 @@ def cifar10(opt):
 
     loc = '/local2/pratikac/cifar/'
     if 'resnet' in opt['m']:
+        print 'Loading unwhitened data for resnet'
         d1 = np.load(loc+'cifar10-train.npz')
         d2 = np.load(loc+'cifar10-test.npz')
     else:

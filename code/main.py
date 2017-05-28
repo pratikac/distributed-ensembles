@@ -152,7 +152,8 @@ def train(e):
             s = dict(i=bi + e*maxb, e=e, f=f, top1=err)
             logger.info('[LOG] ' + json.dumps(s))
 
-        if bi % 25 == 0 and bi != 0:
+        bif = opt['L'] > 0 and 5 or 25
+        if bi % bif == 0 and bi != 0:
             print((color('blue', '[%2d][%4d/%4d] %2.4f %2.2f%%'))%(e,bi,maxb,
                 fs.avg, top1.avg))
 
