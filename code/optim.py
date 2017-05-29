@@ -419,5 +419,4 @@ class DistributedESGD():
                     g0=g0, g1=g1)
                 print 'R[%2d]'%i, {k : round(v, 5) for k,v in debug.items()}
 
-        fs, errs = closure()
         return fs, errs
