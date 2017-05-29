@@ -26,8 +26,8 @@ opt = add_args([
 ['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
 ['-B', 100, 'Max epochs'],
-['--depth', 16, 'ResNet depth'],
-['--widen', 2, 'ResNet widen'],
+['--depth', 28, 'wrn depth'],
+['--widen', 10, 'wrn widen'],
 ['--lr', 0.1, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
 ['--l2', 0.0, 'ell-2'],
@@ -69,7 +69,7 @@ if opt['g'] > 2:
 model = model.cuda()
 criterion = nn.CrossEntropyLoss().cuda()
 optimizer = getattr(optim, opt['optim'])(model.parameters(),
-        config = dict(lr=opt['lr'], momentum=0.9, nesterov=True, weight_decay=opt['l2'],
+        config = dict(lr=opt['lr'], momentum=0.9, nesterov=False, weight_decay=opt['l2'],
         L=opt['L'], eps=opt['eps'], g0=opt['g0'], g1=opt['g1'], verbose=opt['v']))
 
 ckpt = None

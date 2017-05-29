@@ -244,8 +244,6 @@ class wideresnet(nn.Module):
         self.name = 'wideresnet'
 
         opt['d'] = 0.
-        opt['depth'] = 28
-        opt['widen'] = 10
         opt['l2'] = 5e-4
         d, depth, widen = opt['d'], opt['depth'], opt['widen']
 
