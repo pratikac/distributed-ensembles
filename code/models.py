@@ -357,78 +357,31 @@ class ptbl(RNN):
 
 
 class ReplicateModel(nn.Module):
-    def __init__(self, opt, crit, crit_coupling, gidxs):
+    def __init__(self, opt, gpus):
         super(ReplicateModel, self).__init__()
 
         self.t = 0
-        self.opt = deepcopy(opt)
         self.n = opt['n']
         n = self.n
-        self.reference = globals()[opt['m']](opt)
 
-        self.ensemble = [globals()[opt['m']](opt) for i in xrange(n)]
-        self.criteria = [deepcopy(crit) for i in xrange(n)]
-        self.criteria_coupling = [deepcopy(crit_coupling) for i in xrange(n)]
-        self.gidxs = [gidxs[i%len(gidxs)] for i in xrange(n)]
-
-        self.fs = [None for i in xrange(n)]
-        self.fklds = [None for i in xrange(n)]
-        self.ftots = [None for i in xrange(n)]
-
-        self.errs = [None for i in xrange(n)]
-
-        self.reference.cuda(self.gidxs[0])
-        for i in xrange(self.n):
-            self.ensemble[i].cuda(self.gidxs[i])
-            self.criteria[i].cuda(self.gidxs[i])
-            self.criteria_coupling[i].cuda(self.gidxs[i])
+        self.ids = [gpus[i%len(gpus)] for i in xrange(n)]
+        self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in xrange(n)]
+        self.ref = globals()[opt['m']](opt).cuda(0)
 
     def forward(self, xs, ys):
         xs = [[a] for a in xs]
-        yhs = parallel_apply(self.ensemble, xs)
+        return parallel_apply(self.w, xs)
 
-        for i in xrange(self.n):
-            f = self.criteria[i](yhs[i], ys[i])
-            prec1, = exptutils.accuracy(yhs[i].data, ys[i].data, topk=(1,))
-
-            self.fs[i] = f
-            self.errs[i] = 100.-prec1[0]
-
-        for i in xrange(self.n):
-            self.ftots[i] = self.fs[i]
-
-        if self.opt['alpha'] > 0:
-            yhs_softmax = sum([nn.LogSoftmax()(yhs[i].cpu()*self.opt['beta']) \
-                        for i in xrange(self.n)])/float(self.n)
-            yhs_softmax = yhs_softmax.data
-            ensemble_avg = yhs_softmax.clone().zero_()
-            ensemble_avg.addcdiv_(1, yhs_softmax, yhs_softmax.sum(1).expand_as(yhs_softmax))
-
-            for i in xrange(self.n):
-                self.fklds[i] = self.criteria_coupling[i](
-                        nn.LogSoftmax()(yhs[i]), \
-                        Variable(ensemble_avg.clone().cuda(self.gidxs[i]))
-                        )
-                self.ftots[i] += self.opt['alpha']*self.fklds[i]/float(self.n)
-
-            freq = 25 if self.opt['L'] == 0 else 25*self.opt['L']
-            if self.opt['v'] and self.t % freq == 0:
-                #print 'softmax: ', [round(ensemble_avg.mean(0).squeeze()[k], 3) for k in xrange(10)]
-                print 'KLD: ', [round(kld.data[0],5) for kld in self.fklds]
-
-        self.t += 1
-        return self.fs, self.errs
-
-    def backward(self):
-        f = sum(gather(self.ftots, 0))
+    def backward(self, fs):
+        f = sum(gather(fs, 0))
         f.backward()
 
     def train(self):
-        self.reference.train()
+        self.ref.train()
         for i in xrange(self.n):
-            self.ensemble[i].train()
+            self.w[i].train()
 
     def eval(self):
-        self.reference.eval()
+        self.ref.eval()
         for i in xrange(self.n):
-            self.ensemble[i].eval()
+            self.w[i].eval()

@@ -257,15 +257,13 @@ class BSGD(Optimizer):
 
         return mf,merr
 
-class DistributedESGD():
+class DistESGD():
     def __init__(self, config = {}):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0,
                 weight_decay=0, nesterov=True, L=0,
-                g00=1e-2, g01=0,
-                g10=1e-2, g11=0,
-                verbose=False,
-                llr=0.1, eps=1e-4)
+                g0=0.01, g1=1,
+                verbose=False)
 
         for k in defaults:
             if config.get(k, None) is None:
@@ -275,14 +273,14 @@ class DistributedESGD():
 
     def step(self, closure=None, model=None):
         assert (closure is not None) and (model is not None), \
-                'attach closure for DistributedESGD, replicated model'
+                'attach closure and model for DistESGD'
 
         state = self.state
         c = self.config
 
         if not 'N' in state:
-            state['N'] = models.num_parameters(model.ensemble[0])
-            state['n'] = len(model.ensemble)
+            state['N'] = models.num_parameters(model.w[0])
+            state['n'] = len(model.w)
 
         n = state['n']
 
@@ -293,13 +291,11 @@ class DistributedESGD():
         nesterov = c['nesterov']
         verbose = c['verbose']
         L = c['L']
-        eps = c['eps']
-        g00 = c['g00']
-        g01 = c['g01']
-        g10 = c['g10']
-        g11 = c['g11']
-        verbose = c['verbose']
-        llr = c['llr']
+        eps = 1e-4
+        g0 = c['g0']
+        g1 = c['g1']
+        gdot = 1e-3
+        llr = 0.1
         beta1 = 0.75
 
         if not 't' in state:

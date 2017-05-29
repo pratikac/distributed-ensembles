@@ -3,6 +3,7 @@ import numpy as np
 import time, logging, pprint
 
 import torch as th
+import torch.backends.cudnn as cudnn
 import argparse
 
 colors = {  'red':['\033[1;31m','\033[0m'],
@@ -138,5 +139,59 @@ def accuracy(output, target, topk=(1,)):
     res = []
     for k in topk:
         correct_k = correct[:k].view(-1).float().sum(0)
-        res.append(correct_k.mul_(100.0 / batch_size))
+        res.append(correct_k.mul_(100.0 / batch_size)[0])
+    if len(topk) == 1:
+        return res[0]
     return res
+
+def setup(s=42, gpus=[0,1,2]):
+    th.set_num_threads(4)
+    random.seed(s)
+    np.random.seed(s)
+    th.manual_seed(s)
+    th.cuda.manual_seed_all(s)
+    cudnn.benchmark = True
+
+def dry_feed(m, loader, gid=0):
+    def set_dropout(cache = None, p=0):
+        if cache is None:
+            cache = []
+            for l in m.modules():
+                if 'Dropout' in str(type(l)):
+                    cache.append(l.p)
+                    l.p = p
+            return cache
+        else:
+            for l in m.modules():
+                if 'Dropout' in str(type(l)):
+                    assert len(cache) > 0, 'cache is empty'
+                    l.p = cache.pop(0)
+
+    m.train()
+    cache = set_dropout(m)
+    maxb = len(loader)
+    for bi in xrange(maxb):
+        x,y = next(loader)
+        x,y =   Variable(x.cuda(gid, async=True), volatile=True), \
+                Variable(y.squeeze().cuda(gid, async=True), volatile=True)
+        yh = m(x)
+    set_dropout(m,cache)
+
+
+def lrschedule(opt, e, logger):
+    if opt['lrs'] == '':
+        opt['lrs'] = json.dumps([[opt['B'], opt['lr']]])
+
+    lrs = json.loads(opt['lrs'])
+
+    idx = len(lrs)-1
+    for i in xrange(len(lrs)):
+        if e < lrs[i][0]:
+            idx = i
+            break
+    lr = lrs[idx][1]
+
+    print('[LR]: ', lr)
+    if opt['l']:
+        logger.info('[LR] ' + json.dumps({'lr': lr}))
+    optimizer.config['lr'] = lr
