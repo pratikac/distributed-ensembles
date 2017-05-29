@@ -187,7 +187,6 @@ def dry_feed(model):
     set_dropout(cache)
 
 def val(e, data_loader):
-    dry_feed(model)
     model.eval()
 
     maxb = len(data_loader)
