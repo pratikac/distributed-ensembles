@@ -6,6 +6,7 @@ import math, logging, pdb
 from copy import deepcopy
 import exptutils
 import numpy as np
+from torch.nn.parallel import scatter, parallel_apply, gather
 
 class View(nn.Module):
     def __init__(self,o):
@@ -86,7 +87,6 @@ class small_mnistfc(nn.Module):
 
     def forward(self, x):
         return self.m(x)
-
 
 class lenet(nn.Module):
     def __init__(self, opt):
@@ -384,9 +384,8 @@ class ReplicateModel(nn.Module):
             self.criteria_coupling[i].cuda(self.gidxs[i])
 
     def forward(self, xs, ys):
-        yhs = [None for i in xrange(self.n)]
-        for i in xrange(self.n):
-            yhs[i] = self.ensemble[i](xs[i])
+        xs = [[a] for a in xs]
+        yhs = parallel_apply(self.ensemble, xs)
 
         for i in xrange(self.n):
             f = self.criteria[i](yhs[i], ys[i])
@@ -421,8 +420,8 @@ class ReplicateModel(nn.Module):
         return self.fs, self.errs
 
     def backward(self):
-        for i in xrange(self.n):
-            self.ftots[i].backward()
+        f = sum(gather(self.ftots, 0))
+        f.backward()
 
     def train(self):
         self.reference.train()

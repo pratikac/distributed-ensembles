@@ -1,61 +1,80 @@
-from models import *
 import torch as th
 import torch.nn as nn
-from operator import itemgetter
-from future.utils import iteritems
 import numpy as np
-import collections
-import pdb
+import torch.nn.functional as F
+import torch.optim as optim
+from torchvision import datasets, transforms
+from torch.autograd import Variable
 
-# m = lenet({})
-# #m = nn.Sequential(nn.Linear(5,3,2))
+from torch.nn.parallel import scatter, parallel_apply, gather, replicate
 
-# def flatten_params(model, flattened):
-#     flattened.zero_()
-#     idx = 0
-#     for w in model.parameters():
-#         n = w.numel()
-#         flattened[idx:idx+n].copy_(w.data.view(-1))
-#         idx += n
+opt = dict(b=128, d=0., lr=0.1, mom=0.9, n=3)
 
-# def unflatten_params(model, flattened):
-#     offset = 0
-#     for param in model.parameters():
-#         param.data.copy_(flattened[offset:offset + param.nelement()]).view(param.size())
-#         offset += param.nelement()
+class View(nn.Module):
+    def __init__(self,o):
+        super(View, self).__init__()
+        self.o = o
+    def forward(self,x):
+        return x.view(-1, self.o)
 
-# def check_flatten():
-#     for i in xrange(1000):
-#         x = flatten_params(m)
-#         unflatten_params(m, x)
-#     return x
+class lenet(nn.Module):
+    def __init__(self, opt):
+        super(lenet, self).__init__()
 
-# N = num_parameters(m)
-# x = th.FloatTensor(N).zero_()
-# flatten_params(m, x)
+        def convbn(ci,co,ksz,psz,p):
+            return nn.Sequential(
+                nn.Conv2d(ci,co,ksz),
+                nn.ReLU(True),
+                nn.MaxPool2d(psz,stride=psz),
+                nn.BatchNorm2d(co),
+                nn.Dropout(p))
 
-# class caddtable_t(nn.Module):
-#     def __init__(self, ms):
-#         super(caddtable_t, self).__init__()
-#         self.ms = ms
-#     def forward(self, x):
-#         o = self.ms[0](x)
-#         for i in xrange(1, len(self.ms)):
-#             o += self.ms[i](x)
-#         return o
+        self.m = nn.Sequential(
+            convbn(1,20,5,3,0.25),
+            convbn(20,50,5,2,0.25),
+            View(50*2*2),
+            nn.Linear(50*2*2, 500),
+            nn.ReLU(True),
+            nn.Dropout(opt['d']),
+            nn.Linear(500,10),
+            nn.LogSoftmax())
+
+    def forward(self, x):
+        return self.m(x)
 
 
-# b = 1024
-# m = allcnn(dict(dataset='cifar10'))
-# mr = ReplicateModel(m, 3, [0,1,2])
+gids = [0,1,2]
 
-# for e in xrange(1000):
-#     xs = [Variable(th.randn(b,3,32,32).cuda(i)) for i in xrange(3)]
-#     ys = [Variable((th.rand(b,)*10).long().cuda(i)) for i in xrange(3)]
-#     crits = [nn.CrossEntropyLoss().cuda(i) for i in xrange(3)]
+model = lenet(opt).cuda()
 
-#     yhs = mr(xs)
-#     fs = [crits[i](yhs[i], ys[i]) for i in xrange(3)]
-#     for i in xrange(3):
-#         fs[i].backward()
+train_loader = th.utils.data.DataLoader(
+    datasets.MNIST('/local2/pratikac/mnist', train=True, download=False,
+        transform=transforms.Compose([
+                       transforms.ToTensor(),
+                       transforms.Normalize((0.1307,), (0.3081,))
+                   ])),
+    batch_size=opt['b']*opt['n'], shuffle=True, pin_memory=True)
+optimizer = optim.SGD(model.parameters(), lr=opt['lr'], momentum=opt['mom'])
 
+
+def train(e):
+    model.train()
+    for i, (x,y) in enumerate(train_loader):
+        x,y = Variable(x), Variable(y.cuda(0))
+
+        model.zero_grad()
+        replicas = replicate(model, gids)
+        xs = scatter([x], gids)
+        yhs = parallel_apply(replicas, xs)
+        yh = gather(yhs, 0)
+
+        f = F.nll_loss(yh, y)
+        f.backward()
+
+        optimizer.step()
+        if i % 10 == 0:
+            print e, i, len(train_loader), round(f.data[0], 4)
+
+for e in xrange(100):
+    train(e)
+    print ''

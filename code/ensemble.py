@@ -118,8 +118,6 @@ def train(e):
 
     # xs = [Variable(th.randn(opt['b'],3,32,32).cuda(model.gidxs[i])) for i in xrange(opt['n'])]
     # ys = [Variable((th.rand(opt['b'],)*10).long().cuda(model.gidxs[i])) for i in xrange(opt['n'])]
-    #fs, errs = [None for i in xrange(opt['n'])], [None for i in xrange(opt['n'])]
-
     fs = [0 for i in xrange(opt['n'])]
     errs = [0 for i in xrange(opt['n'])]
 
