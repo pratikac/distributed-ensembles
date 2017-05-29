@@ -109,6 +109,7 @@ def schedule(e):
 
 def train(e):
     schedule(e)
+    loader = train_loader.__iter__()
 
     model.train()
 
@@ -116,23 +117,18 @@ def train(e):
     ts = timer()
 
     bsz = opt['b']
-    maxb = len(train_loader)
+    maxb = len(loader)
 
     for bi in xrange(maxb):
         def helper():
             def feval(bprop=True):
-                x,y = next(train_loader)
+                x,y = next(loader)
                 x, y = Variable(x.cuda(async=True)), Variable(y.squeeze().cuda(async=True))
                 bsz = x.size(0)
 
-                optimizer.zero_grad()
                 model.zero_grad()
                 yh = model(x)
                 f = criterion.forward(yh, y)
-
-                # if opt['v'] and bi % 100 == 0:
-                #     print(yh.data[:2])
-                #     print(y.data[:2])
 
                 if bprop:
                     f.backward()

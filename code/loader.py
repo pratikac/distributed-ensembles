@@ -129,8 +129,8 @@ def wrncifar(opt):
         return ds.parallel(batch_size=opt['b'], shuffle=mode,
                            num_workers=4, pin_memory=True)
 
-    train = create_iterator(True).__iter__()
-    val = create_iterator(False).__iter__()
+    train = create_iterator(True)
+    val = create_iterator(False)
 
     return train, val, val, train
 
