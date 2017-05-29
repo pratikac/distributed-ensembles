@@ -34,22 +34,13 @@ class sampler_t:
                     th.index_select(self.y, 0, self.idx)
 
             if self.augment:
-                p = 4
-                x = x.numpy().transpose(0,2,3,1)
+                x = x.numpy().astype(np.float32)
+                x = x.transpose(0,2,3,1)
                 sz = x.shape[1]
                 for i in xrange(self.b):
-                    if np.random.random() < 0.5:
-                        x[i] = cv2.flip(x[i],1)
-
-                    # pad using reflect to preserve color
-                    res = cv2.copyMakeBorder(x[i], p,p,p,p,
-                            borderType=cv2.BORDER_REFLECT, value=0)
-
-                    szx, szy = res.shape[:2]
-                    sz1, sz2 = random.randint(0, szx-sz), random.randint(0, szy-sz)
-                    res = res[sz1:sz1+sz, sz2:sz2+sz]
-                    res = res.reshape(x[i].shape)
-
+                    x[i] = T.RandomHorizontalFlip()(x[i])
+                    res = T.Pad(4, cv2.BORDER_REFLECT)(x[i])
+                    x[i] = T.RandomCrop(32)(res)
                 x = x.transpose(0,3,1,2)
                 x = th.from_numpy(x)
         else:
@@ -100,52 +91,15 @@ def rotmnist(opt):
 
     return train, val, val
 
-def wrncifar(opt):
-    def create_dataset(opt, mode):
-        convert = tnt.transform.compose([
-            lambda x: x.astype(np.float32),
-            T.Normalize([125.3, 123.0, 113.9], [63.0, 62.1, 66.7]),
-            lambda x: x.transpose(2,0,1),
-            th.from_numpy,
-            lambda x: x.float(),
-        ])
-
-        train_transform = tnt.transform.compose([
-            T.RandomHorizontalFlip(),
-            T.Pad(4, cv2.BORDER_REFLECT),
-            T.RandomCrop(32),
-            convert,
-        ])
-
-        ds = getattr(datasets, opt['dataset'].upper())('/local2/pratikac/cifar',
-                train=mode, download=True)
-        smode = 'train' if mode else 'test'
-        ds = tnt.dataset.TensorDataset([getattr(ds, smode + '_data'),
-                                        getattr(ds, smode + '_labels')])
-        return ds.transform({0: train_transform if mode else convert})
-
-    def create_iterator(mode):
-        ds = create_dataset(opt, mode)
-        return ds.parallel(batch_size=opt['b'], shuffle=mode,
-                           num_workers=4, pin_memory=True)
-
-    train = create_iterator(True)
-    val = create_iterator(False)
-
-    return train, val, val, train
-
-
 def cifar10(opt):
-    if 'resnet' in opt['m']:
-        return wrncifar(opt)
-
     frac = opt.get('frac', 1.0)
-
     loc = '/local2/pratikac/cifar/'
     if 'resnet' in opt['m']:
-        print 'Loading unwhitened data for resnet'
         d1 = np.load(loc+'cifar10-train.npz')
         d2 = np.load(loc+'cifar10-test.npz')
+    else:
+        d1 = np.load(loc+'cifar10-train-proc.npz')
+        d2 = np.load(loc+'cifar10-test-proc.npz')
 
     train = sampler_t(opt['b'], th.from_numpy(d1['data']),
                      th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac)
@@ -160,7 +114,6 @@ def cifar100(opt):
         return wrncifar(opt)
 
     frac = opt.get('frac', 1.0)
-
     loc = '/local2/pratikac/cifar/'
     if 'resnet' in opt['m']:
         d1 = np.load(loc+'cifar100-train.npz')
