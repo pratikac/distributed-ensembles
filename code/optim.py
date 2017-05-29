@@ -4,6 +4,7 @@ import numpy as np
 
 import torch as th
 import torch.nn as nn
+from torch.nn.parallel import scatter, parallel_apply, gather
 
 import models
 import pdb
@@ -281,8 +282,11 @@ class DistESGD():
         if not 'N' in state:
             state['N'] = models.num_parameters(model.w[0])
             state['n'] = len(model.w)
+            state['ids'] = deepcopy(model.ids)
 
+        N = state['N']
         n = state['n']
+        ids = state['ids']
 
         lr = c['lr']
         mom = c['momentum']
@@ -292,30 +296,29 @@ class DistESGD():
         verbose = c['verbose']
         L = c['L']
         eps = 1e-4
-        g0 = c['g0']
-        g1 = c['g1']
+        g0 = c['g0']*N
+        g1 = c['g1']*N
         gdot = 1e-3
         llr = 0.1
         beta1 = 0.75
 
         if not 't' in state:
             state['t'] = 0
-            N = state['N']
-            tmp = th.FloatTensor(N)
-            state['wc'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
-            state['dw'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
-            state['dwc'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
-            state['mdw'] = [tmp.clone().cuda(model.gidxs[i]).zero_() for i in xrange(state['n'])]
-
-            state['mu'] = tmp.clone()
-            state['rmu'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
-            state['eta'] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
+            t = th.FloatTensor(N)
 
             state['cache'] = {}
+            state['wc'] = [t.clone().cuda(ids[i]) for i in xrange(n)]
+            state['r'] = t.clone().cuda(0)
+
+            for k in ['dw', 'dwc', 'mdw']:
+                state[k] = deepcopy(state['wc'])
+
             cache = state['cache']
             for k in ['w', 'dw', 'mw', 'mdw']:
-                cache[k] = [tmp.clone().cuda(model.gidxs[i]) for i in xrange(state['n'])]
+                cache[k] = deepcopy(state['wc'])
+
             for i in xrange(n):
+                state['mdw'][i].zero_()
                 cache['mdw'][i].zero_()
 
         state['t'] += 1
@@ -326,70 +329,53 @@ class DistESGD():
         mw, mdw = cache['mw'], cache['mdw']
 
         eta = state['eta']
-        rmu = state['rmu']
-        mu = state['mu'].zero_()
-        for i in xrange(n):
-            rmu[i].zero_()
+        r = state['r'].zero_()
 
         # store initial w,dw
         for i in xrange(n):
-            model.ensemble[i].zero_grad()
+            model.w[i].zero_grad()
         fs, errs = closure()
         for i in xrange(n):
-            flatten_params(model.ensemble[i], wc[i], dwc[i])
+            flatten_params(model.w[i], wc[i], dwc[i])
 
         for i in xrange(n):
             w[i].copy_(wc[i])
             mw[i].copy_(w[i])
 
-        def get_all_gradients():
+        def feval():
             for i in xrange(n):
-                model.ensemble[i].zero_grad()
-                unflatten_params(model.ensemble[i], w[i])
+                model.w[i].zero_grad()
+                unflatten_params(model.w[i], w[i])
             tfs, terrs = closure()
             for i in xrange(n):
-                flatten_params(model.ensemble[i], w[i], dw[i])
+                flatten_params(model.w[i], w[i], dw[i])
                 if wd > 0:
                     dw[i].add_(wd, w[i])
 
-        g0 = g00*(1+g01)**state['t']
+        gsgld = g0*(1-gdot)**state['t']
         for l in xrange(L):
-            get_all_gradients()
-
+            feval()
             for i in xrange(n):
-                dw[i].add_(g0, w[i]-wc[i])
-
-                eta[i].normal_()
-                dw[i].add_(eps/np.sqrt(0.5*llr), eta[i])
-
-                if mom > 0:
-                    mdw[i].mul_(mom).add_(1-damp, dw[i])
-                    if nesterov:
-                        dw[i].add_(mom, mdw[i])
-                    else:
-                        dw[i] = mdw[i]
-
+                dw[i].add_(1./gsgld, w[i]-wc[i])
                 w[i].add_(-llr, dw[i])
                 mw[i].mul_(beta1).add_(1-beta1, w[i])
 
-        mu.zero_()
-        for i in xrange(n):
-            mu.add_(1/float(n), mw[i].cpu())
-        for i in xrange(n):
-            rmu[i].copy_(mu)
+        r.zero_()
+        r = gather(mw, 0).mul_(1/float(n))
+        rc = scatter(r, ids)
 
         dw = state['dw']
         for i in xrange(n):
             dw[i].zero_()
 
-        g1 = g10*(1+g11)**state['t']
+        gesgd = g1*(1-gdot)**state['t']
         for i in xrange(n):
             if L > 0:
                 dw[i].add_(wc[i]-mw[i])
             else:
                 dw[i].add_(dwc[i])
 
-            dw[i].add_(g1, wc[i]-rmu[i])
+            dw[i].add_(1./gesgd, wc[i]-rc[ids[i]])
 
             if mom > 0:
                 state['mdw'][i].mul_(mom).add_(1-damp, dw[i])
@@ -402,17 +388,20 @@ class DistESGD():
 
             unflatten_params(model.ensemble[i], wc[i])
 
-        mu.zero_()
-        for i in xrange(n):
-            mu.add_(1/float(n), wc[i].cpu())
-        unflatten_params(model.reference, mu)
+        r.zero_()
+        r = gather(mw, 0).mul_(1/float(n))
+        unflatten_params(model.ref, r)
 
+        e = 1e-12
         if verbose and state['t'] % 25 == 0:
             for i in xrange(n):
-                debug = dict(dw=dw[i].norm(), dwc=dwc[i].norm(), de= g0*(wc[i]-rmu[i]).norm(),
-                    dwdwc=th.dot(dw[i], dwc[i])/(dw[i].norm()+1e-6)/(dwc[i].norm()+1e-6),
-                    wmu=th.dot(wc[i], rmu[i])/(wc[i].norm()+1e-6)/(rmu[i].norm()+1e-6),
-                    g0=g0, g1=g1)
+                debug = dict(
+                    dw=dw[i].norm(),
+                    dwc=dwc[i].norm(),
+                    de= 1./gesgd*(wc[i]-rc[ids[i]]).norm(),
+                    dwdwc=th.dot(dw[i], dwc[i])/(dw[i].norm()+e)/(dwc[i].norm()+e),
+                    wmu=th.dot(wc[i], rc[ids[i]])/(wc[i].norm()+e)/(rc[ids[i]].norm()+e),
+                    gsgld=gsgld, gesgd=gesgd)
                 print 'R[%2d]'%i, {k : round(v, 5) for k,v in debug.items()}
 
         return fs, errs
