@@ -357,6 +357,14 @@ class DistESGD():
             feval()
             for i in xrange(n):
                 dw[i].add_(1./gsgld, w[i]-wc[i])
+
+                if mom > 0:
+                    mdw[i].mul_(mom).add_(1-damp, dw[i])
+                    if nesterov:
+                        dw[i].add_(mom, mdw[i])
+                    else:
+                        dw[i] = mdw[i]
+
                 w[i].add_(-llr, dw[i])
                 mw[i].mul_(beta1).add_(1-beta1, w[i])
 
