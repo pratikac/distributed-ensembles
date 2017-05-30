@@ -55,39 +55,6 @@ class mnistfc(nn.Module):
     def forward(self, x):
         return self.m(x)
 
-class small_mnistfc(nn.Module):
-    def __init__(self, opt):
-        super(small_mnistfc, self).__init__()
-        self.name = 'small_mnsitfc'
-
-        c = 400
-        opt['d'] = 0.0
-        opt['l2'] = opt['l2']
-
-        self.m = nn.Sequential(
-            View(784),
-            nn.Dropout(0.2),
-            nn.Linear(784,c),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm1d(c),
-            nn.Dropout(opt['d']),
-            nn.Linear(c,c),
-            nn.ReLU(inplace=True),
-            nn.BatchNorm1d(c),
-            nn.Dropout(opt['d']),
-            # nn.Linear(c,c),
-            # nn.ReLU(inplace=True),
-            # nn.BatchNorm1d(c),
-            # nn.Dropout(opt['d']),
-            nn.Linear(c,10))
-
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
-        print(s)
-        logging.info(s)
-
-    def forward(self, x):
-        return self.m(x)
-
 class lenet(nn.Module):
     def __init__(self, opt):
         super(lenet, self).__init__()
@@ -118,44 +85,6 @@ class lenet(nn.Module):
 
     def forward(self, x):
         return self.m(x)
-
-class rotlenet(nn.Module):
-    def __init__(self, opt):
-        super(rotlenet, self).__init__()
-        self.name = 'rotlenet'
-        opt['d'] = 0.3
-
-        def convpool(ci,co,ksz,psz,pstr,p):
-            return nn.Sequential(
-                nn.Conv2d(ci,co,ksz),
-                nn.BatchNorm2d(co),
-                nn.ReLU(True),
-                nn.MaxPool2d(psz,stride=pstr),
-                nn.Dropout(p))
-        def conv(ci,co,ksz,p):
-            return nn.Sequential(
-                nn.Conv2d(ci,co,ksz),
-                nn.BatchNorm2d(co),
-                nn.ReLU(True),
-                nn.Dropout(p))
-
-        self.m = nn.Sequential(
-            conv(1,20,3,opt['d']),
-            convpool(20,20,3,2,2,0),
-            conv(20,20,3,opt['d']),
-            conv(20,20,3,opt['d']),
-            conv(20,20,3,opt['d']),
-            conv(20,20,3,opt['d']),
-            conv(20,10,4,0),
-            View(10))
-
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
-        print(s)
-        logging.info(s)
-
-    def forward(self, x):
-        return self.m(x)
-
 
 class allcnn(nn.Module):
     def __init__(self, opt = {'d':0.5}, c1=96, c2=192):
@@ -199,15 +128,6 @@ class allcnn(nn.Module):
 
     def forward(self, x):
         return self.m(x)
-
-class small_allcnn(allcnn):
-    def __init__(self, opt = {'d':0.5}, c1=32, c2=64):
-        self.name = 'small_allcnn'
-
-        opt['d'] = 0.25
-        opt['l2'] = 1e-3
-
-        super(small_allcnn, self).__init__(opt, c1, c2)
 
 class caddtable_t(nn.Module):
     def __init__(self, m1, m2):
@@ -284,77 +204,6 @@ class wideresnet(nn.Module):
 
     def forward(self, x):
         return self.m(x)
-
-
-class RNN(nn.Module):
-    """Container module with an encoder, a recurrent module, and a decoder."""
-    def __init__(self, param):
-        super(RNN, self).__init__()
-        xdim, hdim, nlayers = param['vocab'], param['hdim'], \
-                param.get('layers',2)
-        self.encoder = nn.Embedding(xdim, hdim)
-        self.rnn = getattr(nn, param['m'])(hdim, hdim, nlayers,
-                    dropout=param['d'])
-        self.decoder = nn.Linear(hdim, xdim)
-        self.drop = nn.Dropout(param['d'])
-
-        if param['tie']:
-            self.decoder.weight = self.encoder.weight
-        self.init_weights()
-
-        self.rnn_type = param['m']
-        self.hdim = hdim
-        self.nlayers = nlayers
-
-    def init_weights(self):
-        dw = 0.1
-        self.encoder.weight.data.uniform_(-dw, dw)
-        self.decoder.bias.data.fill_(0)
-        self.decoder.weight.data.uniform_(-dw, dw)
-
-    def forward(self, x, h):
-        f = self.drop(self.encoder(x))
-        yh, hh = self.rnn(f, h)
-        yh = self.drop(yh)
-        decoded = self.decoder(yh.view(yh.size(0)*yh.size(1), yh.size(2)))
-        return decoded.view(yh.size(0), yh.size(1), decoded.size(1)), hh
-
-    def init_hidden(self, bsz):
-        w = next(self.parameters()).data
-        if self.rnn_type == 'LSTM':
-            return (Variable(w.new(self.nlayers, bsz, self.hdim).zero_()),
-                    Variable(w.new(self.nlayers, bsz, self.hdim).zero_()))
-        else:
-            return Variable(w.new(self.nlayers, bsz, self.hdim).zero_())
-
-def repackage_hidden(h):
-    """Wraps hidden states in new Variables, to detach them from their history."""
-    if type(h) == Variable:
-        return Variable(h.data)
-    else:
-        return tuple(repackage_hidden(v) for v in h)
-
-class ptbs(RNN):
-    def __init__(self, opt={}):
-        self.name = 'ptbs'
-        hdim = opt.get('hdim', 200)
-        d = opt.get('d', 0.2)
-        param = dict(vocab=opt['vocab'], hdim=hdim, layers=2,
-                d=d, tie=True, m='LSTM')
-
-        super(ptbs, self).__init__(param)
-
-class ptbl(RNN):
-    def __init__(self, opt={}):
-        self.name = 'ptbl'
-        hdim = opt.get('hdim', 1500)
-        d = opt.get('d', 0.65)
-
-        param = dict(vocab=opt['vocab'], hdim=hdim, layers=2,
-                d=d, tie=True, m='LSTM')
-
-        super(ptbl, self).__init__(param)
-
 
 class ReplicateModel(nn.Module):
     def __init__(self, opt, gpus):

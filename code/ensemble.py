@@ -147,7 +147,6 @@ def val(e):
                 top1.update(err, bsz)
             print((color('red', '++[%d][%2d] %2.4f %2.4f%%'))%(e, i, f.avg, top1.avg))
 
-
     dry_feed(model.ref, loaders[0]['train_full'])
     model.eval()
     val_loader = loaders[0]['val']

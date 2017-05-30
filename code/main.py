@@ -133,8 +133,7 @@ def train(e):
                 if bprop:
                     f.backward()
 
-                prec1, = accuracy(yh.data, y.data, topk=(1,))
-                err = 100.-prec1[0]
+                err = 100. - accuracy(yh.data, y.data, topk=(1,))
                 return (f.data[0], err)
             return feval
 
@@ -201,8 +200,7 @@ def val(e, data_loader):
         yh = model(x)
 
         f = criterion.forward(yh, y).data[0]
-        prec1, = accuracy(yh.data, y.data, topk=(1,))
-        err = 100-prec1[0]
+        err = 100. - accuracy(yh.data, y.data, topk=(1,))
 
         fs.update(f, bsz)
         top1.update(err, bsz)
@@ -237,8 +235,7 @@ def validate_ensemble(ensemble, data_loader):
 
         #f = criterion.forward(yh, y).data[0]
         f = 0
-        prec1, = accuracy(yh.data, y.data, topk=(1,))
-        err = 100-prec1[0]
+        err = 100 - accuracy(yh.data, y.data, topk=(1,))
 
         fs.update(f, bsz)
         top1.update(err, bsz)
