@@ -229,11 +229,11 @@ class DistESGD():
             state['r'] = t.clone().cuda(0)
 
             for k in ['dw', 'dwc', 'mdw']:
-                state[k] = deepcopy(state['wc'])
+                state[k] = [t.clone().cuda(ids[i]) for i in xrange(n)]
 
             cache = state['cache']
             for k in ['w', 'dw', 'mw', 'mdw']:
-                cache[k] = deepcopy(state['wc'])
+                cache[k] = [t.clone().cuda(ids[i]) for i in xrange(n)]
 
             for i in xrange(n):
                 state['mdw'][i].zero_()

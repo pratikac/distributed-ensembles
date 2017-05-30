@@ -180,7 +180,7 @@ def save_ensemble(e):
     loc = opt.get('o','/local2/pratikac/results')
     th.save(dict(
             ref=model.ref.state_dict(),
-            w = [model.w[i].state_dict() for i in opt['n']],
+            w = [model.w[i].state_dict() for i in xrange(opt['n'])],
             epoch=e),
             os.path.join(loc, opt['filename']+'.pz'))
 
@@ -190,10 +190,10 @@ if not opt['r'] == '':
     model.ref.load_state_dict(d['ref'])
     for i in xrange(opt['n']):
         model.w[i].load_state_dict(d['w'][i])
-    opt['e'] = d['e']
+    opt['e'] = d['e'] + 1
 
 for e in xrange(opt['e'], opt['B']):
     train(e)
     val(e)
     if e % 5 == 0 and e > 0:
-        save_ensemble()
+        save_ensemble(e)
