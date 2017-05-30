@@ -63,7 +63,7 @@ class ESGD(Optimizer):
         nesterov = c['nesterov']
         L = c['L']
         eps = c['eps']
-        g0 = c['g0']
+        g0 = c['g0']/np.sqrt(state['N'])
         g1 = c['g1']
         verbose = c['verbose']
         llr = c['llr']
@@ -215,8 +215,8 @@ class DistESGD():
         verbose = c['verbose']
         L = c['L']
         eps = 1e-4
-        g0 = c['g0']*N
-        g1 = c['g1']*N
+        g0 = c['g0']/np.sqrt(N)
+        g1 = c['g1']/np.sqrt(N)
         gdot = 1e-3
         llr = 0.1
         beta1 = 0.75
@@ -271,11 +271,11 @@ class DistESGD():
                 if wd > 0:
                     dw[i].add_(wd, w[i])
 
-        gsgld = g0*(1-gdot)**state['t']
+        gsgld = g0*(1+gdot)**state['t']
         for l in xrange(L):
             feval()
             for i in xrange(n):
-                dw[i].add_(1./gsgld, w[i]-wc[i])
+                dw[i].add_(gsgld, w[i]-wc[i])
 
                 if mom > 0:
                     mdw[i].mul_(mom).add_(1-damp, dw[i])
@@ -295,14 +295,14 @@ class DistESGD():
         for i in xrange(n):
             dw[i].zero_()
 
-        gesgd = g1*(1-gdot)**state['t']
+        gesgd = g1*(1+gdot)**state['t']
         for i in xrange(n):
             if L > 0:
                 dw[i].add_(wc[i]-mw[i])
             else:
                 dw[i].add_(dwc[i])
 
-            dw[i].add_(1./gesgd, wc[i]-rc[ids[i]])
+            dw[i].add_(gesgd, wc[i]-rc[ids[i]])
 
             if mom > 0:
                 state['mdw'][i].mul_(mom).add_(1-damp, dw[i])
