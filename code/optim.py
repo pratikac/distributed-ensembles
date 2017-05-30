@@ -30,7 +30,7 @@ class ESGD(Optimizer):
 
         defaults = dict(lr=0.1, momentum=0.9, damp=0,
                  weight_decay=0, nesterov=True,
-                 L=0, eps=1e-4, g0=1e-2, g1=0, rho=0,
+                 L=0, eps=1e-4, g0=1e-2, g1=1e-3, rho=0,
                  sgld=False,
                  verbose=False,
                  llr=0.1, beta1=0.75)
@@ -88,8 +88,7 @@ class ESGD(Optimizer):
         state['t'] += 1
         flatten_params(model, state['wc'], state['dwc'])
 
-        g = g0*(1+g1)**state['t']
-
+        g = min(g0*(1+g1)**state['t'], 10)
         cache = state['cache']
         w, dw, mw = cache['w'], cache['dw'], cache['mw']
         eta = state['eta']
@@ -271,7 +270,7 @@ class DistESGD():
                 if wd > 0:
                     dw[i].add_(wd, w[i])
 
-        gsgld = g0*(1+gdot)**state['t']
+        gsgld = min(g0*(1+gdot)**state['t'], 10)
         for l in xrange(L):
             feval()
             for i in xrange(n):
@@ -295,7 +294,7 @@ class DistESGD():
         for i in xrange(n):
             dw[i].zero_()
 
-        gesgd = g1*(1+gdot)**state['t']
+        gesgd = min(g1*(1+gdot)**state['t'], 10)
         for i in xrange(n):
             if L > 0:
                 dw[i].add_(wc[i]-mw[i])
