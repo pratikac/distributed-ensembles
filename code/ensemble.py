@@ -28,8 +28,8 @@ opt = add_args([
 ['--lrs', '', 'learning rate schedule'],
 ['-n', 1, 'replicas'],
 ['-L', 0, 'sgld iterations'],
-['--g0', 0.01, 'SGLD gamma'],
-['--g1', 1, 'elastic gamma'],
+['--g0', 25, 'SGLD gamma'],
+['--g1', 1000, 'elastic gamma'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -56,13 +56,13 @@ for i in xrange(opt['n']):
     tr,v,te,trf = getattr(loader, opt['dataset'])(opt)
     loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
 
-optimizer = DistESGD(config =
+optimizer = optim.DistESGD(config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'],
             g0 = opt['g0'], g1 = opt['g1'],
             verbose=opt['v']))
 
 def train(e):
-    optimier.config['lr'] = lrschedule(opt, e, logger)
+    optimizer.config['lr'] = lrschedule(opt, e, logger)
     model.train()
 
     f, top1, dt = AverageMeter(), AverageMeter(), AverageMeter()
@@ -182,8 +182,7 @@ def save_ensemble(e):
             ref=model.ref.state_dict(),
             w = [model.w[i].state_dict() for i in opt['n']],
             epoch=e),
-            os.path.join(loc, opt['filename']+'.pz')
-            )
+            os.path.join(loc, opt['filename']+'.pz'))
 
 if not opt['r'] == '':
     print('Loading model from: %s', opt['r'])

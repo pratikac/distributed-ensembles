@@ -4,7 +4,7 @@ import numpy as np
 
 import torch as th
 import torch.nn as nn
-from torch.nn.parallel import scatter, parallel_apply, gather
+import torch.cuda.comm as comm
 
 import models
 import pdb
@@ -88,7 +88,7 @@ class ESGD(Optimizer):
         state['t'] += 1
         flatten_params(model, state['wc'], state['dwc'])
 
-        g = min(g0*(1+g1)**state['t'], 10)
+        g = min(g0*(1+g1)**state['t'], 1)
         cache = state['cache']
         w, dw, mw = cache['w'], cache['dw'], cache['mw']
         eta = state['eta']
@@ -246,7 +246,6 @@ class DistESGD():
         dwc, dw = state['dwc'], cache['dw']
         mw, mdw = cache['mw'], cache['mdw']
 
-        eta = state['eta']
         r = state['r'].zero_()
 
         # store initial w,dw
@@ -270,7 +269,7 @@ class DistESGD():
                 if wd > 0:
                     dw[i].add_(wd, w[i])
 
-        gsgld = min(g0*(1+gdot)**state['t'], 10)
+        gsgld = min(g0*(1+gdot)**state['t'], 1)
         for l in xrange(L):
             feval()
             for i in xrange(n):
@@ -287,14 +286,14 @@ class DistESGD():
                 mw[i].mul_(beta1).add_(1-beta1, w[i])
 
         r.zero_()
-        r = gather(mw, 0).mul_(1/float(n))
-        rc = scatter(r, ids)
+        r = comm.reduce_add(mw, 0).mul_(1/float(n))
+        rc = comm.broadcast(r, ids)
 
         dw = state['dw']
         for i in xrange(n):
             dw[i].zero_()
 
-        gesgd = min(g1*(1+gdot)**state['t'], 10)
+        gesgd = min(g1*(1+gdot)**state['t'], 1)
         for i in xrange(n):
             if L > 0:
                 dw[i].add_(wc[i]-mw[i])
@@ -312,10 +311,10 @@ class DistESGD():
 
             wc[i].add_(-lr, dw[i])
 
-            unflatten_params(model.ensemble[i], wc[i])
+            unflatten_params(model.w[i], wc[i])
 
         r.zero_()
-        r = gather(mw, 0).mul_(1/float(n))
+        r = comm.reduce_add(mw, 0).mul_(1/float(n))
         unflatten_params(model.ref, r)
 
         e = 1e-12
