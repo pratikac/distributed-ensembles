@@ -26,9 +26,9 @@ def num_parameters(model):
     return sum([w.numel() for w in model.parameters()])
 
 class mnistfc(nn.Module):
+    name = 'mnistfc'
     def __init__(self, opt):
         super(mnistfc, self).__init__()
-        self.name = 'mnsitfc'
 
         c = 1024
         opt['d'] = 0.2
@@ -56,9 +56,9 @@ class mnistfc(nn.Module):
         return self.m(x)
 
 class lenet(nn.Module):
+    name = 'lenet'
     def __init__(self, opt):
         super(lenet, self).__init__()
-        self.name = 'lenet'
         opt['d'] = 0.25
         opt['l2'] = 0.
 
@@ -87,9 +87,10 @@ class lenet(nn.Module):
         return self.m(x)
 
 class allcnn(nn.Module):
-    def __init__(self, opt = {'d':0.5}, c1=96, c2=192):
+    name = 'allcnn'
+
+    def __init__(self, opt, c1=96, c2=192):
         super(allcnn, self).__init__()
-        self.name = 'allcnn'
 
         if opt['d'] < 0:
             opt['d'] = 0.5
@@ -129,6 +130,16 @@ class allcnn(nn.Module):
     def forward(self, x):
         return self.m(x)
 
+class allcnns(allcnn):
+    name = 'allcnns'
+    def __init__(self, opt, c1=72, c2=144):
+        super(allcnns, self).__init__(opt, c1, c2)
+
+class allcnnl(allcnn):
+    name = 'allcnnl'
+    def __init__(self, opt, c1=120, c2=240):
+        super(allcnnl, self).__init__(opt, c1, c2)
+
 class caddtable_t(nn.Module):
     def __init__(self, m1, m2):
         super(caddtable_t, self).__init__()
@@ -138,6 +149,7 @@ class caddtable_t(nn.Module):
         return th.add(self.m1(x), self.m2(x))
 
 class wideresnet(nn.Module):
+    name = 'wideresnet'
     @staticmethod
     def block(ci, co, s, p=0.):
         h = nn.Sequential(
@@ -161,7 +173,6 @@ class wideresnet(nn.Module):
 
     def __init__(self, opt = {'d':0., 'depth':28, 'widen':10}):
         super(wideresnet, self).__init__()
-        self.name = 'wideresnet'
 
         opt['d'] = 0.
         opt['l2'] = 5e-4

@@ -23,13 +23,15 @@ opt = add_args([
 ['-b', 128, 'batch_size'],
 ['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
+['-d', -1., 'dropout'],
+['--l2', -1., 'ell-2'],
 ['-B', 100, 'Max epochs'],
 ['--lr', 0.1, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
 ['-n', 1, 'replicas'],
 ['-L', 0, 'sgld iterations'],
-['--g0', 25, 'SGLD gamma'],
-['--g1', 1000, 'elastic gamma'],
+['--g0', 5e4, 'SGLD gamma'],
+['--g1', 1e6, 'elastic gamma'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -44,12 +46,13 @@ setup(s=opt['s'], gpus=[0,1,2])
 
 build_filename(opt, blacklist=['lrs',
                             'f','v','dataset', 'augment', 'd', 't',
-                            'depth', 'widen','save','e','l2','r'])
-logger = create_logger(opt)
-pprint(opt)
+                            'depth', 'widen','save','e','l2','r','g0','g1','lr','L'])
 
 model = models.ReplicateModel(opt, gpus=[0,1,2])
 criterion = nn.CrossEntropyLoss()
+
+logger = create_logger(opt)
+pprint(opt)
 
 loaders = []
 for i in xrange(opt['n']):
@@ -59,7 +62,8 @@ for i in xrange(opt['n']):
 optimizer = optim.DistESGD(config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'],
             g0 = opt['g0'], g1 = opt['g1'],
-            verbose=opt['v']))
+            verbose=opt['v'],
+            t=0))
 
 def train(e):
     optimizer.config['lr'] = lrschedule(opt, e, logger)
@@ -129,6 +133,7 @@ def val(e):
     ids = deepcopy(model.ids)
 
     if opt['frac'] < 1:
+        model.train()
         print((color('red', 'Full train:')))
         for i in xrange(n):
             maxb = len(loaders[i]['train_full'])
@@ -181,19 +186,31 @@ def save_ensemble(e):
     th.save(dict(
             ref=model.ref.state_dict(),
             w = [model.w[i].state_dict() for i in xrange(opt['n'])],
-            epoch=e),
+            e=e,
+            t=optimizer.state['t']),
             os.path.join(loc, opt['filename']+'.pz'))
 
 if not opt['r'] == '':
-    print('Loading model from: %s', opt['r'])
+    print('Loading model from: ', opt['r'])
     d = th.load(opt['r'])
     model.ref.load_state_dict(d['ref'])
+    model.ref = model.ref.cuda(0)
     for i in xrange(opt['n']):
         model.w[i].load_state_dict(d['w'][i])
+        model.w[i] = model.w[i].cuda(model.ids[i])
     opt['e'] = d['e'] + 1
+
+    print('New optimizer')
+    optimizer = optim.DistESGD(config =
+        dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'],
+            g0 = opt['g0'], g1 = opt['g1'],
+            verbose=opt['v'],
+            t=d['t']))
+
+    print('Loaded model, validation')
+    val(opt['e'])
 
 for e in xrange(opt['e'], opt['B']):
     train(e)
     val(e)
-    if e % 5 == 0 and e > 0:
-        save_ensemble(e)
+    save_ensemble(e)

@@ -40,7 +40,7 @@ class sampler_t:
                 for i in xrange(self.b):
                     x[i] = T.RandomHorizontalFlip()(x[i])
                     res = T.Pad(4, cv2.BORDER_REFLECT)(x[i])
-                    x[i] = T.RandomCrop(32)(res)
+                    x[i] = T.RandomCrop(sz)(res)
                 x = x.transpose(0,3,1,2)
                 x = th.from_numpy(x)
         else:
@@ -76,20 +76,6 @@ def mnist(opt):
     val = sampler_t(opt['b'], d2.test_data.view(-1,1,28,28).float(),
         d2.test_labels, train=False)
     return train, val, val, train_full
-
-def rotmnist(opt):
-    frac = opt.get('frac', 1.0)
-
-    loc = '/local2/pratikac/rotmnist/'
-    d1 = np.load(loc+'mnist_all_rotation_normalized_float_train_valid.npy')
-    d2 = np.load(loc+'mnist_all_rotation_normalized_float_test.npy')
-
-    train = sampler_t(opt['b'], th.from_numpy(d1[:,:-1]).float().view(-1,1,28,28)/255.,
-            th.from_numpy(d1[:,-1]).long(), augment=opt['augment'], frac=frac)
-    val = sampler_t(opt['b'], th.from_numpy(d2[:,:-1]).float().view(-1,1,28,28)/255.,
-            th.from_numpy(d2[:,-1]).long(), train=False)
-
-    return train, val, val
 
 def cifar10(opt):
     frac = opt.get('frac', 1.0)
@@ -169,67 +155,3 @@ def imagenet(opt, only_train=False):
             num_workers=nw, pin_memory=True)
 
     return train_loader, val_loader
-
-# PTB
-class Dictionary(object):
-    def __init__(self):
-        self.word2idx = {}
-        self.idx2word = []
-
-    def add_word(self, word):
-        if word not in self.word2idx:
-            self.idx2word.append(word)
-            self.word2idx[word] = len(self.idx2word) - 1
-        return self.word2idx[word]
-
-    def __len__(self):
-        return len(self.idx2word)
-
-class Corpus(object):
-    def __init__(self):
-        path = '/local2/pratikac/ptb'
-        self.dictionary = Dictionary()
-        self.train = self.tokenize(os.path.join(path, 'ptb.train.txt'))
-        self.valid = self.tokenize(os.path.join(path, 'ptb.valid.txt'))
-        self.test = self.tokenize(os.path.join(path, 'ptb.test.txt'))
-
-    def tokenize(self, path):
-        assert os.path.exists(path)
-        # Add words to the dictionary
-        with open(path, 'r') as f:
-            tokens = 0
-            for line in f:
-                words = line.split() + ['<eos>']
-                tokens += len(words)
-                for word in words:
-                    self.dictionary.add_word(word)
-
-        with open(path, 'r') as f:
-            ids = th.LongTensor(tokens)
-            token = 0
-            for line in f:
-                words = line.split() + ['<eos>']
-                for word in words:
-                    ids[token] = self.dictionary.word2idx[word]
-                    token += 1
-
-        return ids
-
-def ptb(opt):
-    c = Corpus()
-    b = opt['b']
-
-    def batchify(d):
-        nb = d.size(0) // b
-        d = d.narrow(0, 0, nb*b)
-        d = d.view(b, -1).t().contiguous()
-        return d
-
-    def get_batch(src, i, volatile=False):
-        l = min(opt['T'], len(src)-1-i)
-        return src.narrow(0,i,l), src.narrow(0,i+1, l).view(-1)
-
-    r = {'train': batchify(c.train),
-         'valid': batchify(c.valid),
-         'test': batchify(c.test)}
-    return  c, r, get_batch

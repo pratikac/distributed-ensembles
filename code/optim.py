@@ -63,13 +63,13 @@ class ESGD(Optimizer):
         nesterov = c['nesterov']
         L = c['L']
         eps = c['eps']
-        g0 = c['g0']/np.sqrt(state['N'])
+        g0 = c['g0']/float(state['N'])
         g1 = c['g1']
         verbose = c['verbose']
         llr = c['llr']
         beta1 = c['beta1']
 
-        if not 't' in state:
+        if not 'wc' in state:
             state['t'] = 0
             N = state['N']
             tmp = th.FloatTensor(N).cuda()
@@ -182,13 +182,14 @@ class DistESGD():
         defaults = dict(lr=0.1, momentum=0.9, dampening=0,
                 weight_decay=0, nesterov=True, L=0,
                 g0=0.01, g1=1,
-                verbose=False)
+                verbose=False,
+                t=0)
 
         for k in defaults:
             if config.get(k, None) is None:
                 config[k] = defaults[k]
         self.config = config
-        self.state = {}
+        self.state = {'t':self.config['t']}
 
     def step(self, closure=None, model=None):
         assert (closure is not None) and (model is not None), \
@@ -214,14 +215,13 @@ class DistESGD():
         verbose = c['verbose']
         L = c['L']
         eps = 1e-4
-        g0 = c['g0']/np.sqrt(N)
-        g1 = c['g1']/np.sqrt(N)
+        g0 = c['g0']/float(N)
+        g1 = c['g1']/float(N)
         gdot = 1e-3
         llr = 0.1
         beta1 = 0.75
 
-        if not 't' in state:
-            state['t'] = 0
+        if not 'wc' in state:
             t = th.FloatTensor(N)
 
             state['cache'] = {}
@@ -314,7 +314,7 @@ class DistESGD():
             unflatten_params(model.w[i], wc[i])
 
         r.zero_()
-        r = comm.reduce_add(mw, 0).mul_(1/float(n))
+        r = comm.reduce_add(wc, 0).mul_(1/float(n))
         unflatten_params(model.ref, r)
 
         e = 1e-12
