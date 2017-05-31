@@ -149,7 +149,6 @@ class ESGD(Optimizer):
         w = state['wc']
         w.add_(-lr, dw)
         unflatten_params(model, w)
-
         return mf,merr
 
 class SGD(ESGD):

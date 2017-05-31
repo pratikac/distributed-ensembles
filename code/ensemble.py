@@ -42,7 +42,7 @@ opt = add_args([
 if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
 
-setup(s=opt['s'], gpus=[0,1,2])
+setup(t=4, s=opt['s'], gpus=[0,1,2])
 
 build_filename(opt, blacklist=['lrs',
                             'f','v','dataset', 'augment', 'd', 't',

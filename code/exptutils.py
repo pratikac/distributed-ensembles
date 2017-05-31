@@ -146,8 +146,8 @@ def accuracy(output, target, topk=(1,)):
         return res[0]
     return res
 
-def setup(s=42, gpus=[0,1,2]):
-    th.set_num_threads(4)
+def setup(t=4, s=42, gpus=[0,1,2]):
+    th.set_num_threads(t)
     np.random.seed(s)
     th.manual_seed(s)
     th.cuda.manual_seed_all(s)

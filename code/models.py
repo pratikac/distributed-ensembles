@@ -220,6 +220,8 @@ class ReplicateModel(nn.Module):
     def __init__(self, opt, gpus):
         super(ReplicateModel, self).__init__()
 
+        self.forloop = False
+
         self.t = 0
         self.n = opt['n']
         n = self.n
@@ -229,12 +231,22 @@ class ReplicateModel(nn.Module):
         self.ref = globals()[opt['m']](opt).cuda(0)
 
     def forward(self, xs, ys):
-        xs = [[a] for a in xs]
-        return parallel_apply(self.w, xs)
+        if not self.forloop:
+            xs = [[a] for a in xs]
+            return parallel_apply(self.w, xs)
+
+        yhs = [None]*self.n
+        for i in xrange(self.n):
+            yhs[i] = self.w[i](xs[i])
+        return yhs
 
     def backward(self, fs):
-        f = sum(gather(fs, 0))
-        f.backward()
+        if not self.forloop:
+            f = sum(gather(fs, 0))
+            f.backward()
+        else:
+            for i in xrange(self.n):
+                fs[i].backward()
 
     def train(self):
         self.ref.train()
