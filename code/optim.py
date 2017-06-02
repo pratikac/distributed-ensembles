@@ -13,10 +13,12 @@ def flatten_params(model, fw, dfw):
     fw.zero_()
     dfw.zero_()
     idx = 0
+
     for w in model.parameters():
         n = w.numel()
         fw[idx:idx+n].copy_(w.data.view(-1))
-        dfw[idx:idx+n].copy_(w.grad.data.view(-1))
+        if w.grad is not None:
+            dfw[idx:idx+n].copy_(w.grad.data.view(-1))
         idx += n
 
 def unflatten_params(model, fw):
@@ -175,6 +177,82 @@ class SGLD(ESGD):
         super(SGLD, self).__init__(params, config)
         self.config = config
 
+class HJ(Optimizer):
+    def __init__(self, params, config = {}):
+
+        defaults = dict(lr=0.1, weight_decay=0, L=0, g0=1, g1=1e-3,
+                 verbose=False)
+
+        for k in defaults:
+            if config.get(k, None) is None:
+                config[k] = defaults[k]
+
+        super(HJ, self).__init__(params, config)
+        self.config = config
+
+    def step(self, closure=None, model=None, criterion=None):
+        assert (closure is not None) and (model is not None) and (criterion is not None), \
+                'attach closure for Entropy-SGD, model and criterion'
+
+        state = self.state
+        c = self.config
+
+        if not 'N' in state:
+            state['N'] = models.num_parameters(model)
+
+        lr = c['lr']
+        wd = c['weight_decay']
+        L = c['L']
+        g0 = c['g0']
+        g1 = c['g1']
+        verbose = c['verbose']
+        beta1 = 0.75
+        mom = 0.9
+
+        if not 'wc' in state:
+            state['t'] = 0
+            N = state['N']
+            tmp = th.FloatTensor(N).cuda()
+            state['wc'] = tmp.clone()
+            state['dw'] = tmp.clone()
+            state['x'] = tmp.clone()
+            state['y'] = tmp.clone()
+
+        state['t'] += 1
+        flatten_params(model, state['wc'], state['dw'])
+
+        g = g0*(1+g1)**state['t']
+        dt = min(1./g, 1)
+
+        dw = state['dw']
+        x, y = state['x'], state['y']
+
+        f, err = None, None
+        for i in xrange(L):
+            x.copy_(state['wc'])
+            x.add_(-dt, y)
+
+            model.zero_grad()
+            unflatten_params(model, x)
+            f, err = closure()
+            flatten_params(model, x, dw)
+            if not 'mw' in state:
+                state['mdw'] = dw.clone()
+
+            if wd > 0:
+                dw.add_(wd, x)
+
+            y.mul_(beta1).add_(1-beta1, dw)
+
+        mdw = state['mdw']
+        mdw.mul_(0.9).add_(1, y)
+        y.add_(mom, mdw)
+
+        state['wc'].add_(-lr, y)
+        unflatten_params(model, state['wc'])
+
+        return f, err
+
 class DistESGD():
     def __init__(self, config = {}):
 
@@ -262,7 +340,9 @@ class DistESGD():
             for i in xrange(n):
                 model.w[i].zero_grad()
                 unflatten_params(model.w[i], w[i])
+
             tfs, terrs = closure()
+
             for i in xrange(n):
                 flatten_params(model.w[i], w[i], dw[i])
                 if wd > 0:
