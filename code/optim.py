@@ -216,7 +216,7 @@ class HJ(Optimizer):
             state['wc'] = tmp.clone()
             state['dw'] = tmp.clone()
             state['x'] = tmp.clone()
-            state['y'] = tmp.clone()
+            state['y'] = tmp.clone().zero_()
 
         state['t'] += 1
         flatten_params(model, state['wc'], state['dw'])
