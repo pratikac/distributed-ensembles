@@ -111,9 +111,10 @@ class ESGD(object):
             w.add_(-llr, dw)
             mw.mul_(beta1).add_(1-beta1, w)
 
-        dw = dwc
         if L > 0:
-            dw = wc - mw
+            dw.copy_(wc - mw)
+        else:
+            dw.copy_(dwc)
 
         if verbose and state['t'] % 25 == 0:
             debug = dict(dw=dw.norm(), dwc=dwc.norm(),
@@ -157,7 +158,7 @@ class DistESGD(object):
     def __init__(self, model, config = {}):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0,
-                weight_decay=0, nesterov=True, L=0,
+                weight_decay=0, nesterov=True, L=25,
                 g0=0.01, g1=1,
                 verbose=False,
                 t=0)
@@ -203,6 +204,7 @@ class DistESGD(object):
             state['w'] = [t.clone().cuda(ids[i]) for i in xrange(n)]
             state['dw'] = [t.clone().cuda(ids[i]) for i in xrange(n)]
             state['r'], state['dr'] = t.clone().cuda(0), t.clone().cuda(0)
+
             for i in xrange(n):
                 flatten_params(model.w[i], state['w'][i], state['dw'][i])
             flatten_params(model.ref, state['r'], state['dr'])
@@ -261,7 +263,7 @@ class DistESGD(object):
         r.copy_(comm.reduce_add(mw, 0)).mul_(1/float(n))
         rc = comm.broadcast(r, ids)
 
-        gesgd = min(g1*(1+gdot)**state['t'], 10)
+        gesgd = min(g1*(1+gdot)**state['t'], 1)
         for i in xrange(n):
             if L > 0:
                 dw[i].copy_(wc[i]-mw[i])
