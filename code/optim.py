@@ -263,9 +263,10 @@ class DistESGD(object):
 
         gesgd = min(g1*(1+gdot)**state['t'], 10)
         for i in xrange(n):
-            dw[i] = dwc[i]
             if L > 0:
-                dw[i] = wc[i]-mw[i]
+                dw[i].copy_(wc[i]-mw[i])
+            else:
+                dw[i].copy_(dwc[i])
 
             dw[i].add_(gesgd, wc[i]-rc[ids[i]])
 
