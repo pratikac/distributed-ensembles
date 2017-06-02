@@ -23,6 +23,7 @@ opt = add_args([
 ['-b', 128, 'batch_size'],
 ['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
+['--optim', 'ElasticSGD', 'optim'],
 ['-d', -1., 'dropout'],
 ['--l2', -1., 'ell-2'],
 ['-B', 100, 'Max epochs'],
@@ -30,8 +31,8 @@ opt = add_args([
 ['--lrs', '', 'learning rate schedule'],
 ['-n', 1, 'replicas'],
 ['-L', 0, 'sgld iterations'],
-['--g0', 5e4, 'SGLD gamma'],
-['--g1', 1e6, 'elastic gamma'],
+['--g0', 0.01, 'SGLD gamma'],
+['--g1', 1, 'elastic gamma'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -59,7 +60,7 @@ for i in xrange(opt['n']):
     tr,v,te,trf = getattr(loader, opt['dataset'])(opt)
     loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
 
-optimizer = optim.DistESGD(config =
+optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'],
             g0 = opt['g0'], g1 = opt['g1'],
             verbose=opt['v'],
@@ -101,7 +102,7 @@ def train(e):
                 return fs, errs
             return feval
 
-        fs, errs = optimizer.step(helper(), model)
+        fs, errs = optimizer.step(helper())
 
         f.update(np.mean(fs), bsz)
         fstd.update(np.std(fs), bsz)
@@ -200,7 +201,7 @@ if not opt['r'] == '':
         model.w[i] = model.w[i].cuda(model.ids[i])
     opt['e'] = d['e'] + 1
 
-    print('New optimizer')
+    print('Loading new optimizer')
     optimizer = optim.DistESGD(config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'],
             g0 = opt['g0'], g1 = opt['g1'],

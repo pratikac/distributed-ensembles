@@ -68,7 +68,7 @@ if opt['g'] > 2:
     model = th.nn.DataParallel(model)
 model = model.cuda()
 criterion = nn.CrossEntropyLoss().cuda()
-optimizer = getattr(optim, opt['optim'])(model.parameters(),
+optimizer = getattr(optim, opt['optim'])(model,
         config = dict(lr=opt['lr'], momentum=0.9, nesterov=False, weight_decay=opt['l2'],
         L=opt['L'], eps=opt['eps'], g0=opt['g0'], g1=opt['g1'], verbose=opt['v']))
 
@@ -137,7 +137,7 @@ def train(e):
                 return (f.data[0], err)
             return feval
 
-        f, err = optimizer.step(helper(), model, criterion)
+        f, err = optimizer.step(helper())
         th.cuda.synchronize()
 
         fs.update(f, bsz)
