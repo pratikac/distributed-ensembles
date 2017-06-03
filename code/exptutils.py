@@ -37,7 +37,7 @@ def add_args(args):
     return vars(p.parse_args())
 
 def build_filename(opt, blacklist=[], marker=''):
-    blacklist = blacklist + ['l','h','o','b','B','g','retrain']
+    blacklist = blacklist + ['l','h','o','B','g','r']
     o = json.loads(json.dumps(opt))
     for k in blacklist:
         o.pop(k,None)
