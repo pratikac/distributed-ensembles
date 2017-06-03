@@ -45,7 +45,6 @@ opt = add_args([
 if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
 gpus = [i if opt['g'] > 2 else opt['g'] for i in xrange(3)]
-print(gpus)
 setup(  t=4, s=opt['s'],
         gpus=gpus)
 
@@ -116,7 +115,7 @@ def train(e):
 
         if opt['l']:
             s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), top1=np.mean(errs),
-                    fstd=np.std(fs), top1std=np.std(errs))
+                    fstd=np.std(fs), top1std=np.std(errs), dt=dt.avg)
             logger.info('[LOG] ' + json.dumps(s))
 
         bif = dt.avg > 1 and 5 or 25

@@ -47,7 +47,7 @@ for v in product(*values):
 
     c = cmd+s+' -l'
     if not opt['dist']:
-        c = c + (' -l -g %d')%(gs[len(cmds)%len(gs)])
+        c = c + (' -g %d')%(gs[len(cmds)%len(gs)])
     cmds.append(c)
 
 if not opt['run']:
