@@ -113,7 +113,7 @@ def train(e):
 
     model.train()
 
-    fs, top1 = AverageMeter(), AverageMeter()
+    fs, top1, dt = AverageMeter(), AverageMeter(), AverageMeter()
     ts = timer()
 
     bsz = opt['b']
@@ -142,19 +142,19 @@ def train(e):
 
         fs.update(f, bsz)
         top1.update(err, bsz)
+        dt.update(timer()-ts, 1)
 
         if opt['l']:
             s = dict(i=bi + e*maxb, e=e, f=f, top1=err)
             logger.info('[LOG] ' + json.dumps(s))
 
-        #bif = opt['L'] > 0 and 5 or 25
-        bif = 25
+        bif = dt.avg > 1 and 5 or 25
         if bi % bif == 0 and bi != 0:
             print((color('blue', '[%2d][%4d/%4d] %2.4f %2.2f%%'))%(e,bi,maxb,
                 fs.avg, top1.avg))
 
     if opt['l']:
-        s = dict(e=e, i=0, f=fs.avg, top1=top1.avg, train=True)
+        s = dict(e=e, i=0, f=fs.avg, top1=top1.avg, train=True, t=timer()-ts)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 

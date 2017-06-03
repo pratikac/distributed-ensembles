@@ -6,6 +6,7 @@ parser.add_argument('-c','--command',   help='Main command', type=str, required=
 parser.add_argument('-p','--params',    help='JSON dict of the hyper-parameters', type=str)
 parser.add_argument('-r', '--run',      help='run',  action='store_true')
 parser.add_argument('-j', '--max_jobs',     help='max jobs',    type=int, default = 1)
+parser.add_argument('--dist',           help='using dist sgd',    action='store_true')
 opt = vars(parser.parse_args())
 
 def chunks(l, n):
@@ -44,8 +45,9 @@ for v in product(*values):
         else:
             s += ' -'+k+' '+str(p[k])
 
-    c = cmd+s
-    c = c + (' -l -g %d')%(gs[len(cmds)%len(gs)])
+    c = cmd+s+' -l'
+    if not opt['dist']:
+        c = c + (' -l -g %d')%(gs[len(cmds)%len(gs)])
     cmds.append(c)
 
 if not opt['run']:

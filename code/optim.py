@@ -131,7 +131,6 @@ class ESGD(object):
 
         w.copy_(wc)
         w.add_(-lr, dw)
-
         return f, err
 
 class SGD(ESGD):
@@ -263,7 +262,7 @@ class DistESGD(object):
         r.copy_(comm.reduce_add(mw, 0)).mul_(1/float(n))
         rc = comm.broadcast(r, ids)
 
-        gesgd = min(g1*(1+gdot)**state['t'], 1)
+        gesgd = min(g1*(1+gdot)**state['t'], 10)
         for i in xrange(n):
             if L > 0:
                 dw[i].copy_(wc[i]-mw[i])

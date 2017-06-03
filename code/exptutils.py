@@ -152,6 +152,8 @@ def setup(t=4, s=42, gpus=[0,1,2]):
     th.manual_seed(s)
     th.cuda.manual_seed_all(s)
     cudnn.benchmark = True
+    if len(gpus) == 1:
+        th.cuda.set_device(gpus[0])
 
 def dry_feed(m, loader, gid=0):
     def set_dropout(cache = None, p=0):

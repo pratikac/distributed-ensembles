@@ -18,7 +18,8 @@ from copy import deepcopy
 opt = add_args([
 ['-o', '/local2/pratikac/results', 'output'],
 ['-m', 'lenet', 'lenet | mnistfc | allcnn | wideresnet'],
-['--dataset', 'mnist', 'mnist | rotmnist | cifar10 | cifar100'],
+['--dataset', 'mnist', 'mnist | cifar10 | cifar100'],
+['-g', 3, 'gpu idx'],
 ['--frac', 1.0, 'fraction of dataset'],
 ['-b', 128, 'batch_size'],
 ['--augment', False, 'data augmentation'],
@@ -32,7 +33,7 @@ opt = add_args([
 ['-n', 1, 'replicas'],
 ['-L', 0, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
-['--g1', 1, 'elastic gamma'],
+['--g1', 1., 'elastic gamma'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -43,7 +44,8 @@ opt = add_args([
 if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
 
-setup(t=4, s=opt['s'], gpus=[0,1,2])
+setup(t=4, s=opt['s'],
+        gpus=[0,1,2] and opt['g'] > 2 or [opt['g']])
 
 build_filename(opt, blacklist=['lrs',
                             'f','v','dataset', 'augment', 'd', 't',
@@ -116,12 +118,13 @@ def train(e):
                     fstd=np.std(fs), top1std=np.std(errs))
             logger.info('[LOG] ' + json.dumps(s))
 
-        if bi % 25 == 0:
+        bif = dt.avg > 1 and 5 or 25
+        if bi % bif == 0 and bi != 0:
             print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f%%'))%(dt.avg, e,bi,maxb,
                 f.avg, fstd.avg, top1.avg, top1std.avg))
 
     if opt['l']:
-        s = dict(e=e, i=0, f=f.avg, top1=top1.avg, train=True)
+        s = dict(e=e, i=0, f=f.avg, top1=top1.avg, train=True, t=timer()-t0)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
