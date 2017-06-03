@@ -24,16 +24,16 @@ opt = add_args([
 ['-b', 128, 'batch_size'],
 ['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
-['--optim', 'ElasticSGD', 'optim'],
+['--optim', 'DistESGD', 'optim'],
 ['-d', -1., 'dropout'],
 ['--l2', -1., 'ell-2'],
 ['-B', 100, 'Max epochs'],
 ['--lr', 0.1, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
 ['-n', 1, 'replicas'],
-['-L', 0, 'sgld iterations'],
+['-L', 25, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
-['--g1', 1., 'elastic gamma'],
+['--g1', 1.0, 'elastic gamma'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -45,6 +45,7 @@ opt = add_args([
 if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
 gpus = [i if opt['g'] > 2 else opt['g'] for i in xrange(3)]
+print(gpus)
 setup(  t=4, s=opt['s'],
         gpus=gpus)
 

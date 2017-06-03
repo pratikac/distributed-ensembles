@@ -261,7 +261,7 @@ class DistESGD(object):
 
         r.zero_()
         r.copy_(comm.reduce_add(mw, 0)).mul_(1/float(n))
-        rc = comm.broadcast(r, [rid]+ids)
+        rc = comm.broadcast(r, ids)
 
         gesgd = min(g1*(1+gdot)**state['t'], 10)
         for i in xrange(n):
@@ -307,4 +307,5 @@ class ElasticSGD(DistESGD):
             if config.get(k, None) is None:
                 config[k] = defaults[k]
 
+        config['L'] = 0
         super(ElasticSGD, self).__init__(model, config)

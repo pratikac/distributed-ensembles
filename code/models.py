@@ -59,7 +59,9 @@ class lenet(nn.Module):
     name = 'lenet'
     def __init__(self, opt):
         super(lenet, self).__init__()
-        opt['d'] = 0.25
+
+        if opt['d'] < 0:
+            opt['d'] = 0.25
         opt['l2'] = 0.
 
         def convbn(ci,co,ksz,psz,p):
