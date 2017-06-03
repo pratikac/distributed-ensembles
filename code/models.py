@@ -228,7 +228,8 @@ class ReplicateModel(nn.Module):
 
         self.ids = [gpus[i%len(gpus)] for i in xrange(n)]
         self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in xrange(n)]
-        self.ref = globals()[opt['m']](opt).cuda(0)
+        self.refid = self.ids[0]
+        self.ref = globals()[opt['m']](opt).cuda(self.refid)
 
     def forward(self, xs, ys):
         if not self.forloop:
@@ -242,7 +243,7 @@ class ReplicateModel(nn.Module):
 
     def backward(self, fs):
         if not self.forloop:
-            f = sum(gather(fs, 0))
+            f = sum(gather(fs, self.refid))
             f.backward()
         else:
             for i in xrange(self.n):

@@ -152,10 +152,8 @@ def setup(t=4, s=42, gpus=[0,1,2]):
     th.manual_seed(s)
     th.cuda.manual_seed_all(s)
     cudnn.benchmark = True
-    if len(gpus) == 1:
-        th.cuda.set_device(gpus[0])
 
-def dry_feed(m, loader, gid=0):
+def dry_feed(m, loader, id=0):
     def set_dropout(cache = None, p=0):
         if cache is None:
             cache = []
@@ -175,8 +173,8 @@ def dry_feed(m, loader, gid=0):
     maxb = len(loader)
     for bi in xrange(maxb):
         x,y = next(loader)
-        x,y =   Variable(x.cuda(gid, async=True), volatile=True), \
-                Variable(y.squeeze().cuda(gid, async=True), volatile=True)
+        x,y =   Variable(x.cuda(id, async=True), volatile=True), \
+                Variable(y.squeeze().cuda(id, async=True), volatile=True)
         yh = m(x)
     set_dropout(cache)
 

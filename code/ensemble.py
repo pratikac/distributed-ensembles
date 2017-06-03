@@ -41,17 +41,17 @@ opt = add_args([
 ['-r', '', 'resume ckpt'],
 ['--save', False, 'save ckpt'],
 ])
+
 if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
-
-setup(t=4, s=opt['s'],
-        gpus=[0,1,2] and opt['g'] > 2 or [opt['g']])
+gpus = [i if opt['g'] > 2 else opt['g'] for i in xrange(3)]
+setup(  t=4, s=opt['s'],
+        gpus=gpus)
 
 build_filename(opt, blacklist=['lrs',
                             'f','v','dataset', 'augment', 'd', 't',
                             'depth', 'widen','save','e','l2','r','g0','g1','lr','L'])
-
-model = models.ReplicateModel(opt, gpus=[0,1,2])
+model = models.ReplicateModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
 
 logger = create_logger(opt)
@@ -156,7 +156,8 @@ def val(e):
                 top1.update(err, bsz)
             print((color('red', '++[%d][%2d] %2.4f %2.4f%%'))%(e, i, f.avg, top1.avg))
 
-    dry_feed(model.ref, loaders[0]['train_full'])
+    rid = model.refid
+    dry_feed(model.ref, loaders[0]['train_full'], id=rid)
     model.eval()
     val_loader = loaders[0]['val']
     maxb = len(val_loader)
@@ -165,11 +166,11 @@ def val(e):
         x,y = next(val_loader)
         bsz = x.size(0)
 
-        xc,yc = Variable(x.cuda(0, async=True), volatile=True), \
-                Variable(y.squeeze().cuda(0, async=True), volatile=True)
+        xc,yc = Variable(x.cuda(rid, async=True), volatile=True), \
+                Variable(y.squeeze().cuda(rid, async=True), volatile=True)
 
         yh = model.ref(xc)
-        _f = criterion.cuda(0)(yh, yc).data[0]
+        _f = criterion.cuda(rid)(yh, yc).data[0]
         err = 100. - accuracy(yh.data, yc.data, topk=(1,))
         f.update(_f, bsz)
         top1.update(err, bsz)
@@ -198,7 +199,7 @@ if not opt['r'] == '':
     print('Loading model from: ', opt['r'])
     d = th.load(opt['r'])
     model.ref.load_state_dict(d['ref'])
-    model.ref = model.ref.cuda(0)
+    model.ref = model.ref.cuda(model.refid)
     for i in xrange(opt['n']):
         model.w[i].load_state_dict(d['w'][i])
         model.w[i] = model.w[i].cuda(model.ids[i])

@@ -183,6 +183,7 @@ class DistESGD(object):
         N = state['N']
         n = state['n']
         ids = state['ids']
+        rid = model.refid
 
         lr = c['lr']
         mom = c['momentum']
@@ -202,7 +203,7 @@ class DistESGD(object):
 
             state['w'] = [t.clone().cuda(ids[i]) for i in xrange(n)]
             state['dw'] = [t.clone().cuda(ids[i]) for i in xrange(n)]
-            state['r'], state['dr'] = t.clone().cuda(0), t.clone().cuda(0)
+            state['r'], state['dr'] = t.clone().cuda(rid), t.clone().cuda(rid)
 
             for i in xrange(n):
                 flatten_params(model.w[i], state['w'][i], state['dw'][i])
@@ -260,7 +261,7 @@ class DistESGD(object):
 
         r.zero_()
         r.copy_(comm.reduce_add(mw, 0)).mul_(1/float(n))
-        rc = comm.broadcast(r, ids)
+        rc = comm.broadcast(r, [rid]+ids)
 
         gesgd = min(g1*(1+gdot)**state['t'], 10)
         for i in xrange(n):
@@ -269,7 +270,7 @@ class DistESGD(object):
             else:
                 dw[i].copy_(dwc[i])
 
-            dw[i].add_(gesgd, wc[i]-rc[ids[i]])
+            dw[i].add_(gesgd, wc[i]-rc[i])
 
             if mom > 0:
                 mdw[i].mul_(mom).add_(1-damp, dw[i])
@@ -292,7 +293,7 @@ class DistESGD(object):
                     dwc=dwc[i].norm(),
                     de= 1./gesgd*(w[i]-rc[ids[i]]).norm(),
                     dwdwc=th.dot(dw[i], dwc[i])/(dw[i].norm()+e)/(dwc[i].norm()+e),
-                    wmu=th.dot(w[i], rc[ids[i]])/(w[i].norm()+e)/(rc[ids[i]].norm()+e),
+                    wmu=th.dot(w[i], rc[i])/(w[i].norm()+e)/(rc[i].norm()+e),
                     gsgld=gsgld, gesgd=gesgd)
                 print 'R[%2d]'%i, {k : round(v, 5) for k,v in debug.items()}
 
