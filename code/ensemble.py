@@ -48,9 +48,9 @@ gpus = [i if opt['g'] > 2 else opt['g'] for i in xrange(3)]
 setup(  t=4, s=opt['s'],
         gpus=gpus)
 
-build_filename(opt, blacklist=['lrs',
+build_filename(opt, blacklist=['lrs', 'optim', 'frac',
                             'f','v','dataset', 'augment', 'd', 't',
-                            'depth', 'widen','save','e','l2','r','g0','g1','lr','L'])
+                            'save','e','l2','r', 'lr'])
 model = models.ReplicateModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
 

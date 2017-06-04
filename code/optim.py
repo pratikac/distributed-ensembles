@@ -25,134 +25,6 @@ def flatten_params(m, fw, fdw):
 
         idx += w.data.numel()
 
-class ESGD(object):
-    def __init__(self, model, config = {}):
-
-        defaults = dict(lr=0.1, momentum=0.9, damp=0,
-                 weight_decay=0, nesterov=True,
-                 L=0, eps=1e-4, g0=1e-2, g1=1e-3,
-                 verbose=False,
-                 llr=0.1, beta1=0.75)
-
-        self.model = model
-
-        for k in defaults:
-            if config.get(k, None) is None:
-                config[k] = defaults[k]
-
-        self.config = config
-        self.state = dict(N=models.num_parameters(self.model), t=0)
-
-    def step(self, closure=None):
-        assert closure is not None, 'attach closure for Entropy-SGD'
-
-        state = self.state
-        c = self.config
-
-        lr = c['lr']
-        mom = c['momentum']
-        wd = c['weight_decay']
-        damp = c['damp']
-        nesterov = c['nesterov']
-        L = c['L']
-        eps = c['eps']
-        g0 = c['g0']
-        g1 = c['g1']
-        verbose = c['verbose']
-        llr = c['llr']
-        beta1 = c['beta1']
-
-        if not 'w' in state:
-            N = state['N']
-            tmp = th.FloatTensor(N).cuda()
-
-            for k in ['w', 'dw', 'mw', 'mdw', 'cmdw', 'eta', 'wc', 'dwc']:
-                state[k] = tmp.clone()
-
-            flatten_params(self.model, state['w'], state['dw'])
-            state['mdw'].zero_()
-            state['cmdw'].zero_()
-
-        state['t'] += 1
-
-        g = min(g0*(1+g1)**state['t'], 1)
-
-        w, dw = state['w'], state['dw']
-        mw, cmdw, eta = state['mw'], state['cmdw'], state['eta']
-        mdw = state['mdw']
-
-        f, err = None, None
-        if L == 0:
-            f, err = closure()
-
-        wc, dwc = state['wc'], state['dwc']
-        wc.copy_(w)
-        dwc.copy_(dw)
-        mw.copy_(w)
-
-        for i in xrange(L):
-            dw.zero_()
-            f, err = closure()
-            if wd > 0:
-                dw.add_(wd, w)
-
-            dw.add_(g, w - wc)
-
-            eta.normal_()
-            dw.add_(eps/np.sqrt(0.5*llr), eta)
-
-            if mom > 0:
-                cmdw.mul_(mom).add_(1-damp, dw)
-                if nesterov:
-                    dw.add_(mom, cmdw)
-                else:
-                    dw = cmdw
-
-            w.add_(-llr, dw)
-            mw.mul_(beta1).add_(1-beta1, w)
-
-        if L > 0:
-            dw.copy_(wc - mw)
-        else:
-            dw.copy_(dwc)
-
-        if verbose and state['t'] % 25 == 0:
-            debug = dict(dw=dw.norm(), dwc=dwc.norm(),
-                dwdwc=th.dot(dw, dwc)/dw.norm()/dwc.norm(),
-                f=cf, g=g)
-            print {k : round(v, 5) for k,v in debug.items()}
-
-        if mom > 0:
-            mdw.mul_(mom).add_(1-damp, dw)
-            if nesterov:
-                dw.add_(mom, mdw)
-            else:
-                dw = mdw
-
-        w.copy_(wc)
-        w.add_(-lr, dw)
-        return f, err
-
-class SGD(ESGD):
-    def __init__(self, model, config = {}):
-
-        defaults = dict(L=0)
-        for k in defaults:
-            if config.get(k, None) is None:
-                config[k] = defaults[k]
-
-        super(SGD, self).__init__(model, config)
-
-class HJ(ESGD):
-    def __init__(self, model, config = {}):
-
-        defaults = dict(beta1=0, eps=0)
-        for k in defaults:
-            if config.get(k, None) is None:
-                config[k] = defaults[k]
-
-        super(HJ, self).__init__(model, config)
-
 class DistESGD(object):
     def __init__(self, model, config = {}):
 
@@ -309,3 +181,13 @@ class ElasticSGD(DistESGD):
 
         config['L'] = 0
         super(ElasticSGD, self).__init__(model, config)
+
+class SGD(DistESGD):
+    def __init__(self, model, config = {}):
+
+        defaults = dict(L=0, g1=0)
+        for k in defaults:
+            if config.get(k, None) is None:
+                config[k] = defaults[k]
+
+        super(SGD, self).__init__(model, config)
