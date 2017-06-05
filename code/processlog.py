@@ -10,15 +10,8 @@ sns.set()
 
 colors = sns.color_palette("husl", 8)
 
-whitelist = set(['s','m','lr','eps', 'g0', 'g1', 'n', 'd', 'L', 'optim'])
-
-def get_params_from_filename(s):
-    t = s[s.find('('):s.find('_opt_')]
-    _s = s[s.find('_opt_')+5:-4]
-    r = json.loads(_s)
-    r = {k: v for k,v in r.items() if k in whitelist}
-    r['t'] = t
-    return r
+blacklist = ['filename', 'o', 'save', 'B', 'lrs', 'validate', 'g','f','widen',
+            'v', 'l2', 'lr','l','augment','depth','retrain','e']
 
 def get_params_from_log(f):
     r = {}
@@ -26,7 +19,10 @@ def get_params_from_log(f):
         if '[OPT]' in l[:5]:
             r = json.loads(l[5:-1])
             fn = r['filename']
-            r['t'] = fn[fn.find('('):fn.find(')')]
+            for k in blacklist:
+                r.pop(k, None)
+            #r = {k: v for k,v in r.items() if k in whitelist}
+            r['t'] = fn[fn.find('(')+1:fn.find(')')]
             return r
     assert len(r.keys) > 0, 'Could not find [OPT] marker in '+f
 
@@ -72,7 +68,7 @@ def loaddir(dir, expr='*', force=False):
     for f in fs:
         di = loadlog(f)
         d.append(di)
-        print get_params_from_filename(f)
+        print get_params_from_log(f)
 
     d = pd.concat(d)
     pickle.dump(d, open(pkl, 'w'), protocol=pickle.HIGHEST_PROTOCOL)
