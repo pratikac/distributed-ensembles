@@ -63,44 +63,41 @@ dc.loc[dc.L==0,'L'] = 1
 dc.loc[:,'e'] += 1
 dc['ee'] = dc['e']*dc['L']
 
-# lenet
 d = dc.copy()
 d = d[(d['val'] == True)]
 
+colors = {'SGD':'k', 'ESGD':'r', 'Dist-ESGD (n=3)':'b', 'Dist-ESGD (n=6)':'g'}
+
 d['optim'] = 'SGD'
 d.ix[(d['L'] !=1) & (d['n'] == 1), 'optim'] = 'ESGD'
-d.ix[(d['L'] !=1) & (d['n'] > 1), 'optim'] = 'Dist-ESGD'
+for ni in np.unique(dc.n):
+    if ni != 1:
+        d.ix[(d['L'] !=1) & (d['n'] == ni), 'optim'] = 'Dist-ESGD (n=%d)'%(ni)
 
 d = d.filter(items=['f','top1','s','ee','optim','n'])
 
-colors = {'SGD':'k', 'ESGD':'r', 'Dist-ESGD':'b'}
+def rough(d):
+    fig = plt.figure()
+    plt.clf()
+    sns.tsplot(time='ee',value='top1',data=d,
+                unit='s',condition='optim', color=colors)
+    sns.tsplot(time='ee',value='top1',
+                data=d[(d['optim'] != 'SGD')],
+                marker='o', interpolate=False,
+                unit='s',condition='optim', color=colors,
+                legend=False)
+    plt.title(opt['m'])
+    plt.grid('on')
 
-plt.figure(1)
-plt.clf()
-sns.tsplot(time='ee',value='top1',data=d,
-            unit='s',condition='optim', color=colors)
-sns.tsplot(time='ee',value='top1',
-            data=d[ (d['optim'] != 'SGD')],
-            marker='o', interpolate=False,
-            unit='s',condition='optim', color=colors,
-            legend=False)
-plt.title(opt['m'])
-plt.grid('on')
+    plt.xlabel('Epochs x L')
+    plt.legend(markerscale=0)
+    return fig
 
-# train = False
-# if train:
-#     plt.figure(2)
-#     plt.clf()
-#     d = dc.copy()
-#     d = d[(d['train'] == True)]
-#     d = d.drop_duplicates(['s', 'ee'])
-#     sns.tsplot(time='ee',value='top1',data=d,
-#                 unit='s',condition='optim', color=colors,
-#                 legend=False, linestyle='--')
-#     sns.tsplot(time='ee',value='top1',
-#                 data=d[ (d['optim'] != 'SGD')],
-#                 marker='o',
-#                 unit='s',condition='optim', color=colors,
-#                 legend=False, linestyle='--')
-#     plt.title(opt['m'])
-#     plt.grid('on')
+# mnist
+f = rough(d)
+plt.figure(f.number)
+plt.title('LeNet (full data)')
+plt.xlim([0, 100])
+plt.ylim([0.4, 1.0])
+if opt['s']:
+    plt.savefig('../fig/mnistfc_valid.pdf', bbox_inches='tight')
