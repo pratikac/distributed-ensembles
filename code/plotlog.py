@@ -34,7 +34,7 @@ opt = vars(parser.parse_args())
 #     rc('text', usetex=True)
 
 if not opt['r']:
-    fsz = 24
+    fsz = 18
     plt.rc('font', size=fsz)
     plt.rc('axes', titlesize=fsz)
     plt.rc('axes', labelsize=fsz)
@@ -49,7 +49,8 @@ whitelist = ['n', 'L', 'e',
             's',
             'train','val',
             'frac']
-colors = {'SGD':'k', 'ESGD':'r', 'Dist-ESGD (n=3)':'b', 'Dist-ESGD (n=6)':'g'}
+colors = {  'SGD':'k', 'SGD (full)':'m',
+            'ESGD':'r', 'Dist-ESGD (n=3)':'b', 'Dist-ESGD (n=6)':'g'}
 
 df = loaddir(os.path.join(opt['l'], opt['m']), force=opt['f'])
 df = df[(df['summary'] == True)]
@@ -62,7 +63,7 @@ df['fstd'].fillna(0.0, inplace=True)
 
 df.loc[df.L==0,'L'] = 1
 df.loc[:,'e'] += 1
-df['ee'] = df['e']*df['L']
+df['ee'] = df['e']*df['L']*df['frac']
 
 df['optim'] = 'GD'
 df.ix[(df['L'] ==1) & (df['n'] == 1), 'optim'] = 'SGD'
@@ -71,33 +72,45 @@ for ni in np.unique(df.n):
     if ni != 1:
         df.ix[(df['L'] !=1) & (df['n'] == ni), 'optim'] = 'Dist-ESGD (n=%d)'%(ni)
 
+sgd = df[(df['optim']=='SGD') & (df['frac'] == 1.0)].copy()
+sgd.replace({'SGD':'SGD (full)'}, inplace=True)
+
 def rough(d, idx=1):
     dc = d.copy()
     dc = dc.filter(items=['f','top1','s','ee','optim','n','val','train'])
 
+    # val
     fig = plt.figure(idx, figsize=(8,7))
     plt.clf()
-    dc = dc[(dc['val'] == True)]
 
-    sns.tsplot(time='ee',value='top1',data=dc,
+    dv = dc[(dc['val'] == True)]
+    sns.tsplot(time='ee',value='top1',data=dv,
                 unit='s',condition='optim', color=colors)
     sns.tsplot(time='ee',value='top1',
-                data=dc[(dc['optim'] != 'SGD')],
+                data=dv[(dv['optim'] != 'SGD')&(dv['optim'] != 'SGD (full)')],
                 marker='o', interpolate=False,
                 unit='s',condition='optim', color=colors,
                 legend=False)
+
+    # # train
+    # dt = dc[(dc['train'] == True)]
+    # sns.tsplot(time='ee',value='top1',data=dt,
+    #             unit='s',condition='optim', color=colors,
+    #             legend=False)
+    # sns.tsplot(time='ee',value='top1',
+    #             data=dt[(dt['optim'] != 'SGD')],
+    #             marker='o', interpolate=False,
+    #             unit='s',condition='optim', color=colors,
+    #             legend=False)
+
     plt.title(opt['m'])
     plt.grid('on')
-
-    plt.xlabel('Epochs x L')
+    plt.xlabel('epochs x L x frac')
     plt.legend(markerscale=0)
     return fig
 
-
-df = df[(df['val'] == True)]
-
 def lenet():
-    f = rough(df[df['frac'] > 0.75], 1)
+    f = rough(df[df['frac'] == 1.0], 1)
     plt.figure(f.number)
     plt.title('LeNet (full data)')
     plt.xlim([0, 100])
@@ -105,27 +118,33 @@ def lenet():
     if opt['s']:
         plt.savefig('../fig/lenet_full_valid.pdf', bbox_inches='tight')
 
-#def cifar():
-    # f = rough(df[df['frac'] > 0.75], 1)
-    # plt.figure(f.number)
-    # plt.title('CIFAR-10: full data')
-    # plt.xlim([0, 300])
-    # plt.ylim([4, 20])
-    # if opt['s']:
-    #     plt.savefig('../fig/cifar_full_valid.pdf', bbox_inches='tight')
+def cifar():
+    f = rough(df[df['frac'] == 1], 1)
+    plt.figure(f.number)
+    plt.title('CIFAR-10: full data')
+    plt.xlabel('epochs x L')
+    plt.xlim([50, 300])
+    plt.ylim([4, 16])
+    if opt['s']:
+        plt.savefig('../fig/cifar_full_valid.pdf', bbox_inches='tight')
 
-f = rough(df[df['frac'] == 0.5], 1)
-plt.figure(f.number)
-plt.title('CIFAR-10: frac=0.5')
-plt.xlim([0, 250])
-plt.ylim([6, 15])
-if opt['s']:
-    plt.savefig('../fig/cifar_half_valid.pdf', bbox_inches='tight')
+    sgd['frac'].replace(1.0, 0.5, inplace=True)
+    f = rough(pd.concat([df[df['frac'] == 0.5], sgd]), 1)
+    plt.figure(f.number)
+    plt.title('CIFAR-10: frac=0.5')
+    plt.xlim([0, 250])
+    plt.ylim([6, 15])
+    if opt['s']:
+        plt.savefig('../fig/cifar_half_valid.pdf', bbox_inches='tight')
 
-# f = rough(df[df['frac'] == 0.25], 1)
-# plt.figure(f.number)
-# plt.title('CIFAR-10: frac=0.25')
-# plt.xlim([0, 200])
-# plt.ylim([5, 30])
-# if opt['s']:
-#     plt.savefig('../fig/cifar_fourth_valid.pdf', bbox_inches='tight')
+    sgd['frac'].replace(0.5, 0.25, inplace=True)
+    f = rough(pd.concat([df[df['frac'] == 0.25], sgd]), 1)
+    plt.figure(f.number)
+    plt.title('CIFAR-10: frac=0.25')
+    plt.xlim([0, 200])
+    plt.ylim([6, 18])
+    if opt['s']:
+        plt.savefig('../fig/cifar_fourth_valid.pdf', bbox_inches='tight')
+
+
+globals()[opt['m']]()
