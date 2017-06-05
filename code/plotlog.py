@@ -28,10 +28,10 @@ parser.add_argument('-r',
             action='store_true')
 opt = vars(parser.parse_args())
 
-if opt['s']:
-    from matplotlib import rc
-    rc('font',**{'family':'serif','serif':['Palatino']})
-    rc('text', usetex=True)
+# if opt['s']:
+#     from matplotlib import rc
+#     rc('font',**{'family':'serif','serif':['Palatino']})
+#     rc('text', usetex=True)
 
 if not opt['r']:
     fsz = 24
@@ -49,40 +49,40 @@ whitelist = ['n', 'L', 'e',
             's',
             'train','val',
             'frac']
-
-dc = loaddir(os.path.join(opt['l'], opt['m']), force=opt['f'])
-dc = dc[(dc['summary'] == True)]
-dc = dc.filter(items=whitelist)
-
-dc['frac'].fillna(1.0, inplace=True)
-dc['n'].fillna(1, inplace=True)
-dc['top1std'].fillna(0.0, inplace=True)
-dc['fstd'].fillna(0.0, inplace=True)
-
-dc.loc[dc.L==0,'L'] = 1
-dc.loc[:,'e'] += 1
-dc['ee'] = dc['e']*dc['L']
-
-d = dc.copy()
-d = d[(d['val'] == True)]
-
 colors = {'SGD':'k', 'ESGD':'r', 'Dist-ESGD (n=3)':'b', 'Dist-ESGD (n=6)':'g'}
 
-d['optim'] = 'SGD'
-d.ix[(d['L'] !=1) & (d['n'] == 1), 'optim'] = 'ESGD'
-for ni in np.unique(dc.n):
+df = loaddir(os.path.join(opt['l'], opt['m']), force=opt['f'])
+df = df[(df['summary'] == True)]
+df = df.filter(items=whitelist)
+
+df['frac'].fillna(1.0, inplace=True)
+df['n'].fillna(1, inplace=True)
+df['top1std'].fillna(0.0, inplace=True)
+df['fstd'].fillna(0.0, inplace=True)
+
+df.loc[df.L==0,'L'] = 1
+df.loc[:,'e'] += 1
+df['ee'] = df['e']*df['L']
+
+df['optim'] = 'GD'
+df.ix[(df['L'] ==1) & (df['n'] == 1), 'optim'] = 'SGD'
+df.ix[(df['L'] !=1) & (df['n'] == 1), 'optim'] = 'ESGD'
+for ni in np.unique(df.n):
     if ni != 1:
-        d.ix[(d['L'] !=1) & (d['n'] == ni), 'optim'] = 'Dist-ESGD (n=%d)'%(ni)
+        df.ix[(df['L'] !=1) & (df['n'] == ni), 'optim'] = 'Dist-ESGD (n=%d)'%(ni)
 
-d = d.filter(items=['f','top1','s','ee','optim','n'])
+def rough(d, idx=1):
+    dc = d.copy()
+    dc = dc.filter(items=['f','top1','s','ee','optim','n','val','train'])
 
-def rough(d):
-    fig = plt.figure()
+    fig = plt.figure(idx, figsize=(8,7))
     plt.clf()
-    sns.tsplot(time='ee',value='top1',data=d,
+    dc = dc[(dc['val'] == True)]
+
+    sns.tsplot(time='ee',value='top1',data=dc,
                 unit='s',condition='optim', color=colors)
     sns.tsplot(time='ee',value='top1',
-                data=d[(d['optim'] != 'SGD')],
+                data=dc[(dc['optim'] != 'SGD')],
                 marker='o', interpolate=False,
                 unit='s',condition='optim', color=colors,
                 legend=False)
@@ -93,11 +93,39 @@ def rough(d):
     plt.legend(markerscale=0)
     return fig
 
-# mnist
-f = rough(d)
+
+df = df[(df['val'] == True)]
+
+def lenet():
+    f = rough(df[df['frac'] > 0.75], 1)
+    plt.figure(f.number)
+    plt.title('LeNet (full data)')
+    plt.xlim([0, 100])
+    plt.ylim([0.4, 1.0])
+    if opt['s']:
+        plt.savefig('../fig/lenet_full_valid.pdf', bbox_inches='tight')
+
+#def cifar():
+    # f = rough(df[df['frac'] > 0.75], 1)
+    # plt.figure(f.number)
+    # plt.title('CIFAR-10: full data')
+    # plt.xlim([0, 300])
+    # plt.ylim([4, 20])
+    # if opt['s']:
+    #     plt.savefig('../fig/cifar_full_valid.pdf', bbox_inches='tight')
+
+f = rough(df[df['frac'] == 0.5], 1)
 plt.figure(f.number)
-plt.title('LeNet (full data)')
-plt.xlim([0, 100])
-plt.ylim([0.4, 1.0])
+plt.title('CIFAR-10: frac=0.5')
+plt.xlim([0, 250])
+plt.ylim([6, 15])
 if opt['s']:
-    plt.savefig('../fig/lenet_valid.pdf', bbox_inches='tight')
+    plt.savefig('../fig/cifar_half_valid.pdf', bbox_inches='tight')
+
+# f = rough(df[df['frac'] == 0.25], 1)
+# plt.figure(f.number)
+# plt.title('CIFAR-10: frac=0.25')
+# plt.xlim([0, 200])
+# plt.ylim([5, 30])
+# if opt['s']:
+#     plt.savefig('../fig/cifar_fourth_valid.pdf', bbox_inches='tight')

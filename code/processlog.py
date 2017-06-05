@@ -11,7 +11,7 @@ sns.set()
 colors = sns.color_palette("husl", 8)
 
 blacklist = ['filename', 'o', 'save', 'B', 'lrs', 'validate', 'g','f','widen',
-            'v', 'l2', 'lr','l','augment','depth','retrain','e']
+            'v', 'l2', 'lr','l','augment','depth','retrain','e','optim']
 
 def get_params_from_log(f):
     r = {}
@@ -34,7 +34,10 @@ def loadlog(f):
         if '[LOG]' in l[:5]:
             logs.append(json.loads(l[5:-1]))
         elif '[SUMMARY]' in l[:9]:
-            summary.append(json.loads(l[9:-1]))
+            try:
+                summary.append(json.loads(l[9:-1]))
+            except ValueError, e:
+                pdb.set_trace()
         else:
             try:
                 s = json.loads(l)
