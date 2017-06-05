@@ -43,6 +43,16 @@ if not opt['r']:
     plt.rc('legend', fontsize=fsz*0.8)
     plt.rc('figure', titlesize=fsz)
 
+def set_ticks(xt=[], xts=[], yt=[], yts=[]):
+    if len(xt):
+        if not len(xts):
+            xts = [str(s) for s in xt]
+        plt.xticks(xt, xts)
+    if len(yt):
+        if not len(yts):
+            yts = [str(s) for s in yt]
+        plt.yticks(yt, yts)
+
 # load data
 whitelist = ['n', 'L', 'e',
             'f', 'fstd', 'top1', 'top1std',
@@ -112,13 +122,14 @@ def rough(d, idx=1):
 def lenet():
     f = rough(df[df['frac'] == 1.0], 1)
     plt.figure(f.number)
-    plt.title('LeNet (full data)')
+    plt.title('LeNet')
     plt.xlim([0, 100])
     plt.ylim([0.4, 1.0])
+    plt.xlabel('epochs x L')
     if opt['s']:
         plt.savefig('../fig/lenet_full_valid.pdf', bbox_inches='tight')
 
-def cifar():
+def allcnn():
     f = rough(df[df['frac'] == 1], 1)
     plt.figure(f.number)
     plt.title('CIFAR-10: full data')
@@ -132,7 +143,8 @@ def cifar():
     f = rough(pd.concat([df[df['frac'] == 0.5], sgd]), 1)
     plt.figure(f.number)
     plt.title('CIFAR-10: frac=0.5')
-    plt.xlim([0, 250])
+    plt.xlabel('epochs x L')
+    plt.xlim([0, 200])
     plt.ylim([6, 15])
     if opt['s']:
         plt.savefig('../fig/cifar_half_valid.pdf', bbox_inches='tight')
@@ -141,8 +153,11 @@ def cifar():
     f = rough(pd.concat([df[df['frac'] == 0.25], sgd]), 1)
     plt.figure(f.number)
     plt.title('CIFAR-10: frac=0.25')
+    plt.xlabel('epochs x L')
     plt.xlim([0, 200])
     plt.ylim([6, 18])
+    set_ticks(xt=[0, 50, 100, 150, 200], yt=[6,10,14,18])
+
     if opt['s']:
         plt.savefig('../fig/cifar_fourth_valid.pdf', bbox_inches='tight')
 
