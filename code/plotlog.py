@@ -100,4 +100,4 @@ plt.title('LeNet (full data)')
 plt.xlim([0, 100])
 plt.ylim([0.4, 1.0])
 if opt['s']:
-    plt.savefig('../fig/mnistfc_valid.pdf', bbox_inches='tight')
+    plt.savefig('../fig/lenet_valid.pdf', bbox_inches='tight')
