@@ -10,7 +10,7 @@ sns.set()
 
 colors = sns.color_palette("husl", 8)
 
-whitelist = set(['s','m','lr','eps', 'g0', 'g1', 'L', 'optim'])
+whitelist = set(['s','m','lr','eps', 'g0', 'g1', 'n', 'd', 'L', 'optim'])
 
 def get_params_from_filename(s):
     t = s[s.find('('):s.find('_opt_')]
@@ -20,9 +20,19 @@ def get_params_from_filename(s):
     r['t'] = t
     return r
 
+def get_params_from_log(f):
+    r = {}
+    for l in open(f):
+        if '[OPT]' in l[:5]:
+            r = json.loads(l[5:-1])
+            fn = r['filename']
+            r['t'] = fn[fn.find('('):fn.find(')')]
+            return r
+    assert len(r.keys) > 0, 'Could not find [OPT] marker in '+f
+
 def loadlog(f):
     logs, summary = [], []
-    opt = get_params_from_filename(f)
+    opt = get_params_from_log(f)
 
     for l in open(f):
         if '[LOG]' in l[:5]:

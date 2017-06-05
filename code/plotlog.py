@@ -12,11 +12,11 @@ sns.set_color_codes()
 
 parser = argparse.ArgumentParser(description='Plotter')
 parser.add_argument('-m',
-            help='mnistfc | lenet | allcnn', type=str,
+            help='lenet | allcnn', type=str,
             default='mnistfc')
 parser.add_argument('-l',
             help='location', type=str,
-            default='/Users/pratik/Dropbox/siap17data')
+            default='/Users/pratik/Dropbox/cs269data')
 parser.add_argument('-f',
             help='reprocess data',
             action='store_true')
