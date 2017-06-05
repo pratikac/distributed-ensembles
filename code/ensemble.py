@@ -29,6 +29,7 @@ opt = add_args([
 ['--l2', -1., 'ell-2'],
 ['-B', 100, 'Max epochs'],
 ['--lr', 0.1, 'learning rate'],
+['--lrd', 0., 'lrd'],
 ['--lrs', '', 'learning rate schedule'],
 ['-n', 1, 'replicas'],
 ['-L', 25, 'sgld iterations'],
@@ -48,12 +49,12 @@ gpus = [i if opt['g'] > 2 else opt['g'] for i in xrange(3)]
 setup(  t=4, s=opt['s'],
         gpus=gpus)
 
-build_filename(opt, blacklist=['lrs', 'optim', 'frac',
-                            'f','v','dataset', 'augment', 'd', 't',
-                            'save','e','l2','r', 'lr'])
 model = models.ReplicateModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
 
+build_filename(opt, blacklist=['lrs', 'optim', 'lrd',
+                            'f','v','dataset', 'augment', 't',
+                            'save','e','l2','r', 'lr'])
 logger = create_logger(opt)
 pprint(opt)
 
@@ -63,7 +64,7 @@ for i in xrange(opt['n']):
     loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
 
 optimizer = getattr(optim, opt['optim'])(model, config =
-        dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'],
+        dict(lr=opt['lr'], lrd=opt['lrd'], weight_decay=opt['l2'], L=opt['L'],
             g0 = opt['g0'], g1 = opt['g1'],
             verbose=opt['v'],
             t=0))
@@ -124,12 +125,12 @@ def train(e):
                 f.avg, fstd.avg, top1.avg, top1std.avg))
 
     if opt['l']:
-        s = dict(e=e, i=0, f=f.avg, top1=top1.avg, train=True, t=timer()-t0)
+        s = dict(e=e, i=0, f=f.avg, fstd=fstd.avg, top1=top1.avg, top1std=top1std.avg, train=True, t=timer()-t0)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
-    print((color('blue', '++[%2d] %2.4f %2.2f%% [%2.2fs]'))% (e,
-        f.avg, top1.avg, timer()-t0))
+    print((color('blue', '++[%2d] %2.4f+-%2.4f %2.2f+-%2.2f%% [%2.2fs]'))% (e,
+        f.avg, fstd.avg, top1.avg, top1std.avg, timer()-t0))
     print()
 
 def val(e):

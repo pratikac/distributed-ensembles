@@ -14,7 +14,7 @@ class sampler_t:
         self.n = x.size(0)
         self.x, self.y = x.pin_memory(), y.pin_memory()
 
-        if train:
+        if train and frac < 1-1e-12:
             idx = th.randperm(self.n)
             self.x = th.index_select(self.x, 0, idx)
             self.y = th.index_select(self.y, 0, idx)
@@ -90,7 +90,7 @@ def cifar10(opt):
     train = sampler_t(opt['b'], th.from_numpy(d1['data']),
                      th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac)
     train_full = sampler_t(opt['b'], th.from_numpy(d1['data']),
-                 th.from_numpy(d1['labels']), augment=opt['augment'], frac=1.0, train=False)
+                 th.from_numpy(d1['labels']), frac=1.0, train=False)
     val = sampler_t(opt['b'], th.from_numpy(d2['data']),
                      th.from_numpy(d2['labels']), train=False)
     return train, val, val, train_full
@@ -110,9 +110,11 @@ def cifar100(opt):
 
     train = sampler_t(opt['b'], th.from_numpy(d1['data']),
                      th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac)
+    train_full = sampler_t(opt['b'], th.from_numpy(d1['data']),
+                     th.from_numpy(d1['labels']), frac=1.0, train=False)
     val = sampler_t(opt['b'], th.from_numpy(d2['data']),
                      th.from_numpy(d2['labels']), train=False)
-    return train, val, val
+    return train, val, val, train_full
 
 def imagenet(opt, only_train=False):
     loc = '/local2/pratikac/imagenet'

@@ -28,7 +28,7 @@ def flatten_params(m, fw, fdw):
 class DistESGD(object):
     def __init__(self, model, config = {}):
 
-        defaults = dict(lr=0.1, momentum=0.9, dampening=0,
+        defaults = dict(lr=0.1, lrd=0, momentum=0.9, dampening=0,
                 weight_decay=0, nesterov=True, L=25,
                 g0=0.01, g1=1,
                 verbose=False,
@@ -58,6 +58,7 @@ class DistESGD(object):
         rid = model.refid
 
         lr = c['lr']
+        lrd = c['lrd']
         mom = c['momentum']
         wd = c['weight_decay']
         damp = c['dampening']
@@ -69,6 +70,9 @@ class DistESGD(object):
         gdot = 1e-3
         llr = 0.1
         beta1 = 0.75
+
+        if lrd > 1e-12:
+            lr = c['lr'] / (1.0 + state['t']*lrd)
 
         if not 'w' in state:
             t = th.FloatTensor(N)
