@@ -96,9 +96,6 @@ def cifar10(opt):
     return train, val, val, train_full
 
 def cifar100(opt):
-    if 'resnet' in opt['m']:
-        return wrncifar(opt)
-
     frac = opt.get('frac', 1.0)
     loc = '/local2/pratikac/cifar/'
     if 'resnet' in opt['m']:

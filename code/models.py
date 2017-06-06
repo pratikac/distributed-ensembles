@@ -176,7 +176,7 @@ class wideresnet(nn.Module):
     def __init__(self, opt = {'d':0., 'depth':28, 'widen':10}):
         super(wideresnet, self).__init__()
 
-        opt['d'] = 0.
+        opt['d'] = 0.25
         opt['l2'] = 5e-4
         d, depth, widen = opt['d'], opt['depth'], opt['widen']
 
