@@ -178,7 +178,7 @@ class wideresnet(nn.Module):
 
         opt['d'] = 0.25
         opt['l2'] = 5e-4
-        d, depth, widen = opt['d'], opt['depth'], opt['widen']
+        d, depth, widen = opt['d'], opt.get('depth', 28), opt.get('widen', 10)
 
         if opt['dataset'] == 'cifar10':
             num_classes = 10

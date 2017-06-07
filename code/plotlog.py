@@ -129,7 +129,7 @@ def lenet():
     if opt['s']:
         plt.savefig('../fig/lenet_full_valid.pdf', bbox_inches='tight')
 
-def allcnn():
+def allcnn_cifar10():
     f = rough(df[df['frac'] == 1], 1)
     plt.figure(f.number)
     plt.title('CIFAR-10: full data')
@@ -137,30 +137,61 @@ def allcnn():
     plt.xlim([50, 300])
     plt.ylim([4, 16])
     if opt['s']:
-        plt.savefig('../fig/cifar_full_valid.pdf', bbox_inches='tight')
+        plt.savefig('../fig/allcnn_cifar10_full_valid.pdf', bbox_inches='tight')
 
     sgd['frac'].replace(1.0, 0.5, inplace=True)
     f = rough(pd.concat([df[df['frac'] == 0.5], sgd]), 2)
     plt.figure(f.number)
     plt.title('CIFAR-10: frac=0.5')
-    plt.xlabel('epochs x L')
+    plt.xlabel('epochs x L x frac')
     plt.xlim([0, 200])
     plt.ylim([6, 15])
     set_ticks(xt=[0, 50, 100, 150, 200], yt=[6,9,12,15])
     if opt['s']:
-        plt.savefig('../fig/cifar_half_valid.pdf', bbox_inches='tight')
+        plt.savefig('../fig/allcnn_cifar10_half_valid.pdf', bbox_inches='tight')
 
     sgd['frac'].replace(0.5, 0.25, inplace=True)
     f = rough(pd.concat([df[df['frac'] == 0.25], sgd]), 3)
     plt.figure(f.number)
     plt.title('CIFAR-10: frac=0.25')
-    plt.xlabel('epochs x L')
+    plt.xlabel('epochs x L x frac')
     plt.xlim([0, 200])
     plt.ylim([6, 18])
     set_ticks(xt=[0, 50, 100, 150, 200], yt=[6,10,14,18])
 
     if opt['s']:
-        plt.savefig('../fig/cifar_fourth_valid.pdf', bbox_inches='tight')
+        plt.savefig('../fig/allcnn_cifar10_fourth_valid.pdf', bbox_inches='tight')
 
+def allcnn_cifar100():
+    f = rough(df[df['frac'] == 1], 1)
+    plt.figure(f.number)
+    plt.title('CIFAR-100: full data')
+    plt.xlabel('epochs x L')
+    plt.xlim([0, 200])
+    plt.ylim([20, 70])
+    if opt['s']:
+        plt.savefig('../fig/allcnn_cifar100_full_valid.pdf', bbox_inches='tight')
+
+    # sgd['frac'].replace(1.0, 0.5, inplace=True)
+    # f = rough(pd.concat([df[df['frac'] == 0.5], sgd]), 2)
+    # plt.figure(f.number)
+    # plt.title('CIFAR-10: frac=0.5')
+    # plt.xlabel('epochs x L')
+    # plt.xlim([0, 200])
+    # plt.ylim([6, 15])
+    # set_ticks(xt=[0, 50, 100, 150, 200], yt=[6,9,12,15])
+    # if opt['s']:
+    #     plt.savefig('../fig/cifar_half_valid.pdf', bbox_inches='tight')
+
+    # sgd['frac'].replace(0.5, 0.25, inplace=True)
+    # f = rough(pd.concat([df[df['frac'] == 0.25], sgd]), 3)
+    # plt.figure(f.number)
+    # plt.title('CIFAR-10: frac=0.25')
+    # plt.xlabel('epochs x L')
+    # plt.xlim([0, 200])
+    # plt.ylim([6, 18])
+    # set_ticks(xt=[0, 50, 100, 150, 200], yt=[6,10,14,18])
+    # if opt['s']:
+    #     plt.savefig('../fig/cifar_fourth_valid.pdf', bbox_inches='tight')
 
 globals()[opt['m']]()
