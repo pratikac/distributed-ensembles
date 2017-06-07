@@ -195,7 +195,6 @@ def allcnn_cifar100():
     # if opt['s']:
     #     plt.savefig('../fig/cifar_fourth_valid.pdf', bbox_inches='tight')
 
-
 def wrn_cifar10():
     f = rough(df[df['frac'] == 1], 1)
     plt.figure(f.number)
