@@ -122,7 +122,7 @@ def rough(d, idx=1):
 def lenet():
     f = rough(df[df['frac'] == 1.0], 1)
     plt.figure(f.number)
-    plt.title('LeNet')
+    plt.title('LeNet: MNIST')
     plt.xlim([0, 100])
     plt.ylim([0.4, 1.0])
     plt.xlabel('epochs x L')
@@ -132,7 +132,7 @@ def lenet():
 def allcnn_cifar10():
     f = rough(df[df['frac'] == 1], 1)
     plt.figure(f.number)
-    plt.title('CIFAR-10: full data')
+    plt.title('All-CNN: CIFAR-10 (full data)')
     plt.xlabel('epochs x L')
     plt.xlim([50, 300])
     plt.ylim([4, 16])
@@ -142,7 +142,7 @@ def allcnn_cifar10():
     sgd['frac'].replace(1.0, 0.5, inplace=True)
     f = rough(pd.concat([df[df['frac'] == 0.5], sgd]), 2)
     plt.figure(f.number)
-    plt.title('CIFAR-10: frac=0.5')
+    plt.title('All-CNN: CIFAR-100 (frac = 0.5)')
     plt.xlabel('epochs x L x frac')
     plt.xlim([0, 200])
     plt.ylim([6, 15])
@@ -153,7 +153,7 @@ def allcnn_cifar10():
     sgd['frac'].replace(0.5, 0.25, inplace=True)
     f = rough(pd.concat([df[df['frac'] == 0.25], sgd]), 3)
     plt.figure(f.number)
-    plt.title('CIFAR-10: frac=0.25')
+    plt.title('All-CNN: CIFAR-100 (frac = 0.25)')
     plt.xlabel('epochs x L x frac')
     plt.xlim([0, 200])
     plt.ylim([6, 18])
@@ -165,10 +165,11 @@ def allcnn_cifar10():
 def allcnn_cifar100():
     f = rough(df[df['frac'] == 1], 1)
     plt.figure(f.number)
-    plt.title('CIFAR-100: full data')
+    plt.title('All-CNN: CIFAR-100 (full data)')
     plt.xlabel('epochs x L')
     plt.xlim([0, 200])
     plt.ylim([20, 70])
+    set_ticks(xt=[0, 50, 100, 150, 200])
     if opt['s']:
         plt.savefig('../fig/allcnn_cifar100_full_valid.pdf', bbox_inches='tight')
 
@@ -193,5 +194,18 @@ def allcnn_cifar100():
     # set_ticks(xt=[0, 50, 100, 150, 200], yt=[6,10,14,18])
     # if opt['s']:
     #     plt.savefig('../fig/cifar_fourth_valid.pdf', bbox_inches='tight')
+
+
+def wrn_cifar10():
+    f = rough(df[df['frac'] == 1], 1)
+    plt.figure(f.number)
+    plt.title('Wide-ResNet: CIFAR-10')
+    plt.xlabel('epochs x L')
+    plt.xlim([0, 200])
+    plt.ylim([20, 70])
+    set_ticks(xt=[0, 50, 100, 150, 200])
+    if opt['s']:
+        plt.savefig('../fig/wrn_cifar10_full_valid.pdf', bbox_inches='tight')
+
 
 globals()[opt['m']]()
