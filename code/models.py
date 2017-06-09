@@ -240,6 +240,48 @@ class wrn502(wideresnet):
         opt['depth'], opt['widen'] = 50, 2
         super(wrn502, self).__init__(opt)
 
+class alexnet(nn.Module):
+    name = 'alexnet'
+    def __init__(self, opt):
+        super(alexnet, self).__init__()
+
+        if opt['d'] < 0:
+            opt['d'] = 0.5
+
+        self.m = nn.Sequential(
+                nn.Conv2d(3,64, kernel_size=11, stride=4, padding=2),
+                nn.BatchNorm2d(64),
+                nn.ReLU(True),
+                nn.MaxPool2d(kernel_size=3, stride=2),
+                nn.Conv2d(64,192, kernel_size=5, padding=2),
+                nn.BatchNorm2d(192),
+                nn.ReLU(True),
+                nn.MaxPool2d(kernel_size=3, stride=2),
+                nn.Conv2d(192,384, kernel_size=3, padding=1),
+                nn.BatchNorm2d(384),
+                nn.ReLU(True),
+                nn.Conv2d(384,256, kernel_size=3, padding=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(True),
+                nn.Conv2d(256,256, kernel_size=3, padding=1),
+                nn.BatchNorm2d(256),
+                nn.ReLU(True),
+                nn.MaxPool2d(kernel_size=3, stride=2),
+                View(256*6*6),
+                nn.Dropout(opt['d']),
+                nn.Linear(256*6*6, 4096),
+                nn.BatchNorm1d(4096),
+                nn.ReLU(True),
+                nn.Dropout(opt['d']),
+                nn.Linear(4096,4096),
+                nn.BatchNorm1d(4096),
+                nn.ReLU(True),
+                nn.Linear(4096,1000),
+                )
+    def forward(self, x):
+        return self.m(x)
+
+
 class ReplicateModel(nn.Module):
     def __init__(self, opt, gpus):
         super(ReplicateModel, self).__init__()
