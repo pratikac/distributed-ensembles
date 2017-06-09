@@ -173,17 +173,24 @@ class wideresnet(nn.Module):
         ls = [blk(i==0 and ci or co, co, i==0 and s or 1, p) for i in xrange(nl)]
         return nn.Sequential(*ls)
 
-    def __init__(self, opt = {'d':0., 'depth':28, 'widen':10}):
+    def __init__(self, opt):
         super(wideresnet, self).__init__()
 
-        opt['d'] = 0.25
-        opt['l2'] = 5e-4
-        d, depth, widen = opt['d'], opt.get('depth', 28), opt.get('widen', 10)
+        if opt['d'] < 0:
+            opt['d'] = 0.25
+        if opt['l2'] < 0:
+            opt['l2'] = 5e-4
 
-        if opt['dataset'] == 'cifar10':
+        d, depth, widen = opt['d'], opt['depth'], opt['widen']
+
+        if opt['dataset'] == 'cifar10' or opt['dataset'] == 'svhn':
             num_classes = 10
         elif opt['dataset'] == 'cifar100':
             num_classes = 100
+        elif opt['dataset'] == 'imagenet':
+            num_classes = 1000
+        else:
+            assert False, 'Unknown dataset '+ opt['dataset']
 
         nc = [16, 16*widen, 32*widen, 64*widen]
         assert (depth-4)%6 == 0, 'Incorrect depth'
@@ -217,6 +224,21 @@ class wideresnet(nn.Module):
 
     def forward(self, x):
         return self.m(x)
+
+class wrn164(wideresnet):
+    def __init__(self, opt):
+        opt['depth'], opt['widen'] = 16,4
+        super(wrn164, self).__init__(opt)
+
+class wrn2810(wideresnet):
+    def __init__(self, opt):
+        opt['depth'], opt['widen'] = 28, 10
+        super(wrn2810, self).__init__(opt)
+
+class wrn502(wideresnet):
+    def __init__(self, opt):
+        opt['depth'], opt['widen'] = 50, 2
+        super(wrn502, self).__init__(opt)
 
 class ReplicateModel(nn.Module):
     def __init__(self, opt, gpus):

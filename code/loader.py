@@ -7,6 +7,7 @@ import torchnet as tnt
 import numpy as np
 import os, sys, pdb, math, random
 import cv2
+import scipy.io as sio
 
 class sampler_t:
     def __init__(self, batch_size, x,y, train=True, augment=False,
@@ -113,9 +114,31 @@ def cifar100(opt):
                      th.from_numpy(d2['labels']), train=False)
     return train, val, val, train_full
 
+def svhn(opt):
+    frac = opt.get('frac', 1.0)
+    loc = '/local2/pratikac/svhn'
+    d1 = sio.loadmat(os.path.join(loc, 'train_32x32.mat'))
+    d2 = sio.loadmat(os.path.join(loc, 'extra_32x32.mat'))
+    d3 = sio.loadmat(os.path.join(loc, 'test_32x32.mat'))
+
+    dt = {  'data': np.concatenate([d1['X'], d2['X']], axis=3),
+            'labels': np.concatenate([d1['y'], d2['y']])-1}
+    dv = {  'data': d3['X'],
+            'labels': d3['y']-1}
+    dt['data'] = np.transpose(dt['data'], (3,2,0,1))
+    dv['data'] = np.transpose(dv['data'], (3,2,0,1))
+
+    train = sampler_t(opt['b'], th.from_numpy(dt['data']).float()/255.,
+                    th.from_numpy(dt['labels']).long(), augment=opt['augment'], frac=frac)
+    train_full = sampler_t(opt['b'], th.from_numpy(dt['data']).float()/255.,
+                    th.from_numpy(dt['labels']).long(), frac=1.0, train=False)
+    val = sampler_t(opt['b'], th.from_numpy(dv['data']).float()/255.,
+                     th.from_numpy(dv['labels']).long(), train=False)
+    return train, val, val, train_full
+
 def imagenet(opt, only_train=False):
     loc = '/local2/pratikac/imagenet'
-    bsz, nw = opt['b'], opt['t']
+    bsz, nw = opt['b'], 4
 
     traindir = os.path.join(loc, 'train')
     valdir = os.path.join(loc, 'val')
