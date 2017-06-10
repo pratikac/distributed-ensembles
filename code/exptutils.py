@@ -147,13 +147,13 @@ def accuracy(output, target, topk=(1,)):
     return res
 
 def setup(t=4, s=42, gpus=[0,1,2]):
+    if len(np.unique(gpus)) == 1:
+        th.cuda.set_device(gpus[0])
     th.set_num_threads(t)
     np.random.seed(s)
     th.manual_seed(s)
     th.cuda.manual_seed_all(s)
     cudnn.benchmark = True
-    if len(np.unique(gpus)) == 1:
-        th.cuda.set_device(gpus[0])
 
 def dry_feed(m, loader, id=0):
     def set_dropout(cache = None, p=0):
