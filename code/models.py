@@ -1,4 +1,5 @@
 import torch as th
+import torchvision as thv
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -7,6 +8,7 @@ from copy import deepcopy
 import exptutils
 import numpy as np
 from torch.nn.parallel import scatter, parallel_apply, gather
+
 
 class View(nn.Module):
     def __init__(self,o):
@@ -226,61 +228,70 @@ class wideresnet(nn.Module):
         return self.m(x)
 
 class wrn164(wideresnet):
+    name ='wrn164'
     def __init__(self, opt):
         opt['depth'], opt['widen'] = 16,4
         super(wrn164, self).__init__(opt)
 
 class wrn2810(wideresnet):
+    name ='wrn2810'
     def __init__(self, opt):
         opt['depth'], opt['widen'] = 28, 10
         super(wrn2810, self).__init__(opt)
 
 class wrn502(wideresnet):
+    name ='wrn502'
     def __init__(self, opt):
         opt['depth'], opt['widen'] = 50, 2
         super(wrn502, self).__init__(opt)
+
+class resnet50(nn.Module):
+    name = 'resnet50'
+    def __init__(self, opt):
+        super(resnet50, self).__init__()
+        self.m = getattr(thv.models, opt['m'])()
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+class resnet101(nn.Module):
+    name = 'resnet101'
+    def __init__(self, opt):
+        super(resnet101, self).__init__()
+        self.m = getattr(thv.models, opt['m'])()
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+class resnet152(nn.Module):
+    name = 'resnet152'
+    def __init__(self, opt):
+        super(resnet152, self).__init__()
+        self.m = getattr(thv.models, opt['m'])()
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
 
 class alexnet(nn.Module):
     name = 'alexnet'
     def __init__(self, opt):
         super(alexnet, self).__init__()
+        self.m = getattr(thv.models, opt['m'])()
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
 
-        if opt['d'] < 0:
-            opt['d'] = 0.5
-
-        self.m = nn.Sequential(
-                nn.Conv2d(3,64, kernel_size=11, stride=4, padding=2),
-                nn.BatchNorm2d(64),
-                nn.ReLU(True),
-                nn.MaxPool2d(kernel_size=3, stride=2),
-                nn.Conv2d(64,192, kernel_size=5, padding=2),
-                nn.BatchNorm2d(192),
-                nn.ReLU(True),
-                nn.MaxPool2d(kernel_size=3, stride=2),
-                nn.Conv2d(192,384, kernel_size=3, padding=1),
-                nn.BatchNorm2d(384),
-                nn.ReLU(True),
-                nn.Conv2d(384,256, kernel_size=3, padding=1),
-                nn.BatchNorm2d(256),
-                nn.ReLU(True),
-                nn.Conv2d(256,256, kernel_size=3, padding=1),
-                nn.BatchNorm2d(256),
-                nn.ReLU(True),
-                nn.MaxPool2d(kernel_size=3, stride=2),
-                View(256*6*6),
-                nn.Dropout(opt['d']),
-                nn.Linear(256*6*6, 4096),
-                nn.BatchNorm1d(4096),
-                nn.ReLU(True),
-                nn.Dropout(opt['d']),
-                nn.Linear(4096,4096),
-                nn.BatchNorm1d(4096),
-                nn.ReLU(True),
-                nn.Linear(4096,1000),
-                )
     def forward(self, x):
         return self.m(x)
-
 
 class ReplicateModel(nn.Module):
     def __init__(self, opt, gpus):

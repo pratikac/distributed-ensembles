@@ -136,6 +136,17 @@ def svhn(opt):
                      th.from_numpy(dv['labels']).long(), train=False)
     return train, val, val, train_full
 
+
+class ReplacementSampler(object):
+    def __init__(self, data_source):
+        self.data_source = data_source
+
+    def __iter__(self):
+        return iter(range(len(self.data_source)))
+
+    def __len__(self):
+        return len(self.data_source)
+
 def imagenet(opt, only_train=False):
     loc = '/local2/pratikac/imagenet'
     bsz, nw = opt['b'], 4
