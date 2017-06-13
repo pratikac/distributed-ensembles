@@ -48,6 +48,8 @@ if opt['L'] > 0 or opt['l']:
 gpus = [i if opt['g'] > 2 else opt['g'] for i in xrange(3)]
 setup(  t=4, s=opt['s'],
         gpus=gpus)
+if opt['dataset'] == 'imagenet':
+    opt['b'] = 32
 
 model = models.ReplicateModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
