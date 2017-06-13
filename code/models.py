@@ -239,11 +239,11 @@ class wrn2810(wideresnet):
         opt['depth'], opt['widen'] = 28, 10
         super(wrn2810, self).__init__(opt)
 
-class wrn502(wideresnet):
-    name ='wrn502'
-    def __init__(self, opt):
-        opt['depth'], opt['widen'] = 50, 2
-        super(wrn502, self).__init__(opt)
+# class wrn502(wideresnet):
+#     name ='wrn502'
+#     def __init__(self, opt):
+#         opt['depth'], opt['widen'] = 50, 2
+#         super(wrn502, self).__init__(opt)
 
 class resnet50(nn.Module):
     name = 'resnet50'
