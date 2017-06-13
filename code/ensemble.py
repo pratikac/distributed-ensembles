@@ -119,7 +119,7 @@ def train(e):
                     fstd=np.std(fs), top1std=np.std(errs), dt=dt.avg)
             logger.info('[LOG] ' + json.dumps(s))
 
-        bif = dt.avg > 1 and 5 or 25
+        bif = int(5/dt.avg)
         if bi % bif == 0 and bi != 0:
             print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f%%'))%(dt.avg, e,bi,maxb,
                 f.avg, fstd.avg, top1.avg, top1std.avg))

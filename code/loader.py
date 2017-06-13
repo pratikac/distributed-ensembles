@@ -148,11 +148,14 @@ def svhn(opt):
 
 
 class ReplacementSampler(object):
-    def __init__(self, data_source):
+    def __init__(self, data_source, num_samples, replacement=True):
         self.data_source = data_source
+        self.weights = th.Tensor(len(data_source)).fill_(1)
+        self.num_samples = num_samples
+        self.replacement = replacement
 
     def __iter__(self):
-        return iter(range(len(self.data_source)))
+        return iter(th.multinomial(self.weights, self.num_samples, self.replacement))
 
     def __len__(self):
         return len(self.data_source)
@@ -171,7 +174,7 @@ def imagenet(opt, only_train=False):
                 transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])]
 
-    if opt['model'].startswith('vgg'):
+    if opt['m'].startswith('vgg'):
         bsz = 64
         input_transform = [transforms.Scale(384)]
         normalize = [transforms.Lambda(lambda img: np.array(img) - np.array([123.68, 116.779, 103.939])),
@@ -181,20 +184,22 @@ def imagenet(opt, only_train=False):
             )
         ]
 
-    train_loader = th.utils.data.DataLoader(
-        datasets.ImageFolder(traindir, transforms.Compose([
+    train_folder = datasets.ImageFolder(traindir, transforms.Compose([
             transforms.RandomSizedCrop(224),
-            transforms.RandomHorizontalFlip()] + affine + normalize
-            )),
+            transforms.RandomHorizontalFlip()] + affine + normalize))
+    train_loader = th.utils.data.DataLoader(
+        train_folder,
         batch_size=bsz, shuffle=True,
+        num_workers=nw, pin_memory=True, sampler=ReplacementSampler(train_folder,
+                                                    len(train_folder)*max(1,opt['L']),
+                                                    replacement=True)
+        )
+
+    val_folder = datasets.ImageFolder(valdir, transforms.Compose(
+            input_transform + [transforms.CenterCrop(224)] + affine + normalize))
+    val_loader = th.utils.data.DataLoader(
+        val_folder,
+        batch_size=bsz, shuffle=False,
         num_workers=nw, pin_memory=True)
 
-    val_loader = None
-    if not only_train:
-        val_loader = th.utils.data.DataLoader(
-            datasets.ImageFolder(valdir, transforms.Compose(
-                input_transform + [transforms.CenterCrop(224)] + affine + normalize)),
-            batch_size=bsz, shuffle=False,
-            num_workers=nw, pin_memory=True)
-
-    return train_loader, val_loader
+    return train_loader.__iter__(), val_loader.__iter__(), val_loader.__iter__(), train_loader.__iter__()
