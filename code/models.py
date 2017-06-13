@@ -233,6 +233,12 @@ class wrn164(wideresnet):
         opt['depth'], opt['widen'] = 16,4
         super(wrn164, self).__init__(opt)
 
+class wrn168(wideresnet):
+    name ='wrn168'
+    def __init__(self, opt):
+        opt['depth'], opt['widen'] = 16,8
+        super(wrn168, self).__init__(opt)
+
 class wrn2810(wideresnet):
     name ='wrn2810'
     def __init__(self, opt):
