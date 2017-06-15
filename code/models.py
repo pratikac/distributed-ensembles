@@ -255,6 +255,7 @@ class resnet50(nn.Module):
     name = 'resnet50'
     def __init__(self, opt):
         super(resnet50, self).__init__()
+        opt['l2'] = 1e-4
         self.m = getattr(thv.models, opt['m'])()
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
         print(s)
@@ -267,6 +268,7 @@ class resnet101(nn.Module):
     name = 'resnet101'
     def __init__(self, opt):
         super(resnet101, self).__init__()
+        opt['l2'] = 1e-4
         self.m = getattr(thv.models, opt['m'])()
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
         print(s)
@@ -279,6 +281,7 @@ class resnet152(nn.Module):
     name = 'resnet152'
     def __init__(self, opt):
         super(resnet152, self).__init__()
+        opt['l2'] = 1e-4
         self.m = getattr(thv.models, opt['m'])()
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
         print(s)
