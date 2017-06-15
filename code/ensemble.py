@@ -169,7 +169,7 @@ def val(e):
             print((color('red', '++[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, i, f.avg, top1.avg, top5.avg))
 
     rid = model.refid
-    if not opt['m'] == 'resnet101':
+    if not opt['m'][:6] == 'resnet':
         dry_feed(model.ref, loaders[0]['train_full'], id=rid)
     model.eval()
     val_loader = loaders[0]['val']
