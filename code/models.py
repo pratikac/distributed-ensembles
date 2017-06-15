@@ -251,12 +251,25 @@ class wrn2810(wideresnet):
 #         opt['depth'], opt['widen'] = 50, 2
 #         super(wrn502, self).__init__(opt)
 
+class resnet18(nn.Module):
+    name = 'resnet18'
+    def __init__(self, opt):
+        super(resnet18, self).__init__()
+        opt['l2'] = 1e-4
+        self.m = thv.models.resnet18()
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
 class resnet50(nn.Module):
     name = 'resnet50'
     def __init__(self, opt):
         super(resnet50, self).__init__()
         opt['l2'] = 1e-4
-        self.m = getattr(thv.models, opt['m'])()
+        self.m = thv.models.resnet50()
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
         print(s)
         logging.info(s)
@@ -269,7 +282,7 @@ class resnet101(nn.Module):
     def __init__(self, opt):
         super(resnet101, self).__init__()
         opt['l2'] = 1e-4
-        self.m = getattr(thv.models, opt['m'])()
+        self.m = thv.models.resnet101()
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
         print(s)
         logging.info(s)
@@ -282,7 +295,7 @@ class resnet152(nn.Module):
     def __init__(self, opt):
         super(resnet152, self).__init__()
         opt['l2'] = 1e-4
-        self.m = getattr(thv.models, opt['m'])()
+        self.m = thv.models.resnet152()
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
         print(s)
         logging.info(s)

@@ -169,7 +169,8 @@ def val(e):
             print((color('red', '++[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, i, f.avg, top1.avg, top5.avg))
 
     rid = model.refid
-    dry_feed(model.ref, loaders[0]['train_full'], id=rid)
+    if not opt['m'] == 'resnet101':
+        dry_feed(model.ref, loaders[0]['train_full'], id=rid)
     model.eval()
     val_loader = loaders[0]['val']
     maxb = len(val_loader)
@@ -188,6 +189,7 @@ def val(e):
         f.update(_f, bsz)
         top1.update(err, bsz)
         top5.update(err5, bsz)
+        print((color('red', '++[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, bi, f.avg, top1.avg, top5.avg))
 
     if opt['l']:
         s = dict(e=e, i=0, f=f.avg, top1=top1.avg, top5=top5.avg, val=True)
@@ -229,6 +231,7 @@ if not opt['r'] == '':
     print('Loaded model, validation')
     val(opt['e'])
 
+val(0)
 for e in xrange(opt['e'], opt['B']):
     train(e)
     val(e)
