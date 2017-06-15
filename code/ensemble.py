@@ -35,6 +35,7 @@ opt = add_args([
 ['-L', 25, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
 ['--g1', 1.0, 'elastic gamma'],
+['--gdot', 1e-3, 'gamma dot'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -67,7 +68,7 @@ for i in xrange(opt['n']):
 
 optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], lrd=opt['lrd'], weight_decay=opt['l2'], L=opt['L'],
-            g0 = opt['g0'], g1 = opt['g1'],
+            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'],
             verbose=opt['v'],
             t=0))
 

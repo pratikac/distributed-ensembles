@@ -30,7 +30,7 @@ class DistESGD(object):
 
         defaults = dict(lr=0.1, lrd=0, momentum=0.9, dampening=0,
                 weight_decay=0, nesterov=True, L=25,
-                g0=0.01, g1=1,
+                g0=0.01, g1=1, gdot=1e-3,
                 verbose=False,
                 t=0)
 
