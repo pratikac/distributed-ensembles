@@ -231,7 +231,6 @@ if not opt['r'] == '':
     print('Loaded model, validation')
     val(opt['e'])
 
-val(0)
 for e in xrange(opt['e'], opt['B']):
     train(e)
     val(e)
