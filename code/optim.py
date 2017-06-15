@@ -104,15 +104,15 @@ class DistESGD(object):
         def feval():
             for i in xrange(n):
                 dw[i].zero_()
-            cfs, cerrs = closure()
+            cfs, cerrs, cerrs5 = closure()
             if wd > 0:
                 for i in xrange(n):
                     dw[i].add_(wd, w[i])
-            return cfs, cerrs
+            return cfs, cerrs, cerrs5
 
-        fs, errs = [None]*n, [None]*n
+        fs, errs, errs5 = [None]*n, [None]*n, [None]*n
         if L == 0:
-            fs, errs = feval()
+            fs, errs, errs5 = feval()
 
         for i in xrange(n):
             wc[i].copy_(w[i])
@@ -121,7 +121,7 @@ class DistESGD(object):
 
         gsgld = min(g0*(1+gdot)**state['t'], 1)
         for l in xrange(L):
-            fs, errs = feval()
+            fs, errs, errs5 = feval()
             for i in xrange(n):
                 dw[i].add_(gsgld, w[i]-wc[i])
 
@@ -173,7 +173,7 @@ class DistESGD(object):
                     gsgld=gsgld, gesgd=gesgd)
                 print 'R[%2d]'%i, {k : round(v, 5) for k,v in debug.items()}
 
-        return fs, errs
+        return fs, errs, errs5
 
 class ElasticSGD(DistESGD):
     def __init__(self, model, config = {}):

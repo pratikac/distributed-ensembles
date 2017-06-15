@@ -76,8 +76,8 @@ def train(e):
     optimizer.config['lr'] = lrschedule(opt, e, logger)
     model.train()
 
-    f, top1, dt = AverageMeter(), AverageMeter(), AverageMeter()
-    fstd, top1std = AverageMeter(), AverageMeter()
+    f, top1, top5, dt = AverageMeter(), AverageMeter(), AverageMeter(), AverageMeter()
+    fstd, top1std, top5std = AverageMeter(), AverageMeter(), AverageMeter()
 
     bsz = opt['b']
     maxb = len(loaders[0]['train'])
@@ -91,7 +91,7 @@ def train(e):
         def helper():
             def feval():
                 xs, ys = [None]*n, [None]*n
-                fs, errs = [None]*n, [None]*n
+                fs, errs, errs5 = [None]*n, [None]*n, [None]*n
 
                 for i in xrange(n):
                     x, y = next(loaders[i]['train'])
@@ -101,39 +101,45 @@ def train(e):
                 yhs = model(xs, ys)
                 for i in xrange(n):
                     fs[i] = criterion.cuda(ids[i])(yhs[i], ys[i])
-                    errs[i] = 100. - accuracy(yhs[i].data, ys[i].data, topk=(1,))
+                    acc = accuracy(yhs[i].data, ys[i].data, topk=(1,5))
+                    errs[i] = 100. - acc[0]
+                    errs5[i] = 100. - acc[1]
                 model.backward(fs)
 
                 fs = [fs[i].data[0] for i in xrange(n)]
-                return fs, errs
+                return fs, errs, errs5
             return feval
 
-        fs, errs = optimizer.step(helper())
+        fs, errs, errs5 = optimizer.step(helper())
 
         f.update(np.mean(fs), bsz)
         fstd.update(np.std(fs), bsz)
 
         top1.update(np.mean(errs), bsz)
         top1std.update(np.std(errs), bsz)
+        top5.update(np.mean(errs5), bsz)
+        top5std.update(np.std(errs5), bsz)
         dt.update(timer()-_dt, 1)
 
         if opt['l']:
-            s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), top1=np.mean(errs),
-                    fstd=np.std(fs), top1std=np.std(errs), dt=dt.avg)
+            s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), top1=np.mean(errs), top5=np.mean(errs5),
+                    fstd=np.std(fs), top1std=np.std(errs), top5std = np.std(errs5), dt=dt.avg)
             logger.info('[LOG] ' + json.dumps(s))
 
         bif = int(5/dt.avg)+1
         if bi % bif == 0 and bi != 0:
-            print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f%%'))%(dt.avg, e,bi,maxb,
-                f.avg, fstd.avg, top1.avg, top1std.avg))
+            print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f%% %2.2f+-%2.2f%%'))%(dt.avg,
+                e,bi,maxb, f.avg, fstd.avg, top1.avg, top1std.avg, top5.avg, top5std.avg))
 
     if opt['l']:
-        s = dict(e=e, i=0, f=f.avg, fstd=fstd.avg, top1=top1.avg, top1std=top1std.avg, train=True, t=timer()-t0)
+        s = dict(e=e, i=0, f=f.avg, fstd=fstd.avg, top1=top1.avg, top1std=top1std.avg,
+                top5=top5.avg, top5std=top5std.avg,
+                train=True, t=timer()-t0)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
-    print((color('blue', '++[%2d] %2.4f+-%2.4f %2.2f+-%2.2f%% [%2.2fs]'))% (e,
-        f.avg, fstd.avg, top1.avg, top1std.avg, timer()-t0))
+    print((color('blue', '++[%2d] %2.4f+-%2.4f %2.2f+-%2.2f%% %2.2f+-%2.2f%% [%2.2fs]'))% (e,
+        f.avg, fstd.avg, top1.avg, top1std.avg, top5.avg, top5std.avg, timer()-t0))
     print()
 
 def val(e):
@@ -145,7 +151,7 @@ def val(e):
         print((color('red', 'Full train:')))
         for i in xrange(n):
             maxb = len(loaders[i]['train_full'])
-            f, top1 = AverageMeter(), AverageMeter()
+            f, top1, top5 = AverageMeter(), AverageMeter(), AverageMeter()
             for bi in xrange(maxb):
                 x,y = next(loaders[i]['train_full'])
                 bsz = x.size(0)
@@ -155,17 +161,19 @@ def val(e):
 
                 yh = model.w[i](x)
                 _f = criterion.cuda(ids[i])(yh, y).data[0]
-                err = 100. - accuracy(yh.data, y.data, topk=(1,))
+                acc = accuracy(yh.data, y.data, topk=(1,5))
+                err, err5 = 100. - acc[0], 100. - acc[1]
                 f.update(_f, bsz)
                 top1.update(err, bsz)
-            print((color('red', '++[%d][%2d] %2.4f %2.4f%%'))%(e, i, f.avg, top1.avg))
+                top5.update(err5, bsz)
+            print((color('red', '++[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, i, f.avg, top1.avg, top5.avg))
 
     rid = model.refid
     dry_feed(model.ref, loaders[0]['train_full'], id=rid)
     model.eval()
     val_loader = loaders[0]['val']
     maxb = len(val_loader)
-    f, top1 = AverageMeter(), AverageMeter()
+    f, top1, top5 = AverageMeter(), AverageMeter(), AverageMeter()
     for bi in xrange(maxb):
         x,y = next(val_loader)
         bsz = x.size(0)
@@ -175,16 +183,18 @@ def val(e):
 
         yh = model.ref(xc)
         _f = criterion.cuda(rid)(yh, yc).data[0]
-        err = 100. - accuracy(yh.data, yc.data, topk=(1,))
+        acc = accuracy(yh.data, yc.data, topk=(1,5))
+        err, err5 = 100. - acc[0], 100. - acc[1]
         f.update(_f, bsz)
         top1.update(err, bsz)
+        top5.update(err5, bsz)
 
     if opt['l']:
-        s = dict(e=e, i=0, f=f.avg, top1=top1.avg, val=True)
+        s = dict(e=e, i=0, f=f.avg, top1=top1.avg, top5=top5.avg, val=True)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
-    print((color('red', '**[%2d] %2.4f %2.4f%%\n'))%(e, f.avg, top1.avg))
+    print((color('red', '**[%2d] %2.4f %2.4f%% %2.4f%%\n'))%(e, f.avg, top1.avg, top5.avg))
     print('')
 
 def save_ensemble(e):
