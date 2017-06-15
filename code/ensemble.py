@@ -20,6 +20,7 @@ opt = add_args([
 ['-m', 'lenet', 'lenet | mnistfc | allcnn | wideresnet'],
 ['--dataset', 'mnist', 'mnist | cifar10 | cifar100'],
 ['-g', 3, 'gpu idx'],
+['--gpus', '', 'groups of gpus'],
 ['--frac', 1.0, 'fraction of dataset'],
 ['-b', 128, 'batch_size'],
 ['--augment', False, 'data augmentation'],
@@ -46,7 +47,11 @@ opt = add_args([
 
 if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
-gpus = [i if opt['g'] > 2 else opt['g'] for i in xrange(3)]
+
+ngpus = th.cuda.device_count()
+gpus = [i if opt['g'] >= ngpus else opt['g'] for i in xrange(ngpus)]
+if not opt['gpus'] == '':
+    gpus = json.loads(opt['gpus']) 
 setup(  t=4, s=opt['s'],
         gpus=gpus)
 if opt['dataset'] == 'imagenet':
@@ -55,7 +60,7 @@ if opt['dataset'] == 'imagenet':
 model = models.ReplicateModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
 
-build_filename(opt, blacklist=['lrs', 'optim', 'lrd',
+build_filename(opt, blacklist=['lrs', 'optim', 'lrd', 'gpus',
                             'f','v', 'augment', 't',
                             'save','e','l2','r', 'lr'])
 logger = create_logger(opt)
