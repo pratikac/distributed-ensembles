@@ -30,7 +30,7 @@ class DistESGD(object):
 
         defaults = dict(lr=0.1, lrd=0, momentum=0.9, dampening=0,
                 weight_decay=0, nesterov=True, L=25,
-                g0=0.01, g1=1, gdot=1e-3,
+                g0=0.01, g1=1, gdot=1e-3, eps=0,
                 verbose=False,
                 t=0)
 
@@ -70,6 +70,7 @@ class DistESGD(object):
         gdot = 1e-3
         llr = 0.1
         beta1 = 0.75
+        eps = c['eps']
 
         if lrd > 1e-12:
             lr = c['lr'] / (1.0 + state['t']*lrd)
@@ -85,7 +86,7 @@ class DistESGD(object):
                 flatten_params(model.w[i], state['w'][i], state['dw'][i])
             flatten_params(model.ref, state['r'], state['dr'])
 
-            for k in ['mw', 'mdw', 'cmdw', 'wc', 'dwc']:
+            for k in ['mw', 'mdw', 'cmdw', 'wc', 'dwc', 'eta']:
                 state[k] = [t.clone().cuda(ids[i]) for i in xrange(n)]
 
             for i in xrange(n):
@@ -97,6 +98,7 @@ class DistESGD(object):
         w, dw = state['w'], state['dw']
         mw, mdw = state['mw'], state['mdw']
         cmdw = state['cmdw']
+        eta = state['eta']
 
         wc, dwc = state['wc'], state['dwc']
         r = state['r']
@@ -124,6 +126,9 @@ class DistESGD(object):
             fs, errs, errs5 = feval()
             for i in xrange(n):
                 dw[i].add_(gsgld, w[i]-wc[i])
+
+                eta[i].normal_()
+                dw[i].add_(eps, eta[i])
 
                 if mom > 0:
                     cmdw[i].mul_(mom).add_(1-damp, dw[i])
@@ -177,21 +182,16 @@ class DistESGD(object):
 
 class ElasticSGD(DistESGD):
     def __init__(self, model, config = {}):
-
-        defaults = dict(L=0)
-        for k in defaults:
-            if config.get(k, None) is None:
-                config[k] = defaults[k]
-
         config['L'] = 0
         super(ElasticSGD, self).__init__(model, config)
 
 class SGD(DistESGD):
     def __init__(self, model, config = {}):
-
-        defaults = dict(L=0, g1=0)
-        for k in defaults:
-            if config.get(k, None) is None:
-                config[k] = defaults[k]
-
+        config['L'] = 0
+        config['g1'] = 0
         super(SGD, self).__init__(model, config)
+ 
+class EntropySGD(DistESGD):
+    def __init__(self, model, config = {}):
+        config['eps'] = 1e-4
+        super(EntropySGD, self).__init__(model, config)
