@@ -51,7 +51,7 @@ if opt['L'] > 0 or opt['l']:
 ngpus = th.cuda.device_count()
 gpus = [i if opt['g'] >= ngpus else opt['g'] for i in xrange(ngpus)]
 if not opt['gpus'] == '':
-    gpus = json.loads(opt['gpus']) 
+    gpus = json.loads(opt['gpus'])
 setup(  t=4, s=opt['s'],
         gpus=gpus)
 if opt['dataset'] == 'imagenet':
@@ -194,7 +194,9 @@ def val(e):
         f.update(_f, bsz)
         top1.update(err, bsz)
         top5.update(err5, bsz)
-        print((color('red', '++[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, bi, f.avg, top1.avg, top5.avg))
+
+        if bi % 25 == 0 and bi != 0:
+            print((color('red', '++[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, bi, f.avg, top1.avg, top5.avg))
 
     if opt['l']:
         s = dict(e=e, i=0, f=f.avg, top1=top1.avg, top5=top5.avg, val=True)

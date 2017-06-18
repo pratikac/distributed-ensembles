@@ -190,8 +190,12 @@ class SGD(DistESGD):
         config['L'] = 0
         config['g1'] = 0
         super(SGD, self).__init__(model, config)
- 
+
 class EntropySGD(DistESGD):
     def __init__(self, model, config = {}):
         config['eps'] = 1e-4
         super(EntropySGD, self).__init__(model, config)
+
+class HJ(DistESGD):
+    def __init__(self, model, config = {}):
+        super(HJ, self).__init__(model, config)
