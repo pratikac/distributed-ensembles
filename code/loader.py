@@ -135,17 +135,24 @@ def svhn(opt):
             'labels': np.concatenate([d1['y'], d2['y']])-1}
     dv = {  'data': d3['X'],
             'labels': d3['y']-1}
+    dt['data'] = np.array(dt['data'], dtype=np.float32)
+    dv['data'] = np.array(dv['data'], dtype=np.float32)
+
     dt['data'] = np.transpose(dt['data'], (3,2,0,1))
     dv['data'] = np.transpose(dv['data'], (3,2,0,1))
 
-    train = sampler_t(opt['b'], th.from_numpy(dt['data']).float()/255.,
-                    th.from_numpy(dt['labels']).long(), augment=opt['augment'], frac=frac)
-    train_full = sampler_t(opt['b'], th.from_numpy(dt['data']).float()/255.,
-                    th.from_numpy(dt['labels']).long(), frac=1.0, train=False)
-    val = sampler_t(opt['b'], th.from_numpy(dv['data']).float()/255.,
-                     th.from_numpy(dv['labels']).long(), train=False)
-    return train, val, val, train_full
+    mean = np.array([109.9, 109.7, 113.8])[None,:,None,None]
+    std = np.array([50.1, 50.6, 50.9])[None,:,None,None]
+    dt['data'] = (dt['data'] - mean)/std
+    dv['data'] = (dv['data'] - mean)/std
 
+    train = sampler_t(opt['b'], th.from_numpy(dt['data']).float(),
+                    th.from_numpy(dt['labels']).long().squeeze(), augment=opt['augment'], frac=frac)
+    train_full = sampler_t(opt['b'], th.from_numpy(dt['data']).float(),
+                    th.from_numpy(dt['labels']).long().squeeze(), frac=1.0, train=False)
+    val = sampler_t(opt['b'], th.from_numpy(dv['data']).float(),
+                     th.from_numpy(dv['labels']).long().squeeze(), train=False)
+    return train, val, val, train_full
 
 class ReplacementSampler(object):
     def __init__(self, data_source, num_samples, replacement=True):

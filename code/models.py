@@ -227,6 +227,12 @@ class wideresnet(nn.Module):
     def forward(self, x):
         return self.m(x)
 
+class wrn101(wideresnet):
+    name ='wrn101'
+    def __init__(self, opt):
+        opt['depth'], opt['widen'] = 10,1
+        super(wrn101, self).__init__(opt)
+
 class wrn164(wideresnet):
     name ='wrn164'
     def __init__(self, opt):
