@@ -195,7 +195,7 @@ def val(e):
         top1.update(err, bsz)
         top5.update(err5, bsz)
 
-        if bi % 25 == 0 and bi != 0:
+        if bi % 100 == 0 and bi != 0:
             print((color('red', '*[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, bi, f.avg, top1.avg, top5.avg))
 
     if opt['l']:
