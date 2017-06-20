@@ -25,7 +25,7 @@ opt = add_args([
 ['-b', 128, 'batch_size'],
 ['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
-['--optim', 'DistESGD', 'optim'],
+['--optim', 'DistESGD', 'optim: DistESGD | SGD | HJ | ElasticSGD | EntropySGD'],
 ['-d', -1., 'dropout'],
 ['--l2', -1., 'ell-2'],
 ['-B', 100, 'Max epochs'],
