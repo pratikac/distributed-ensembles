@@ -73,7 +73,7 @@ for i in xrange(opt['n']):
 
 optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], lrd=opt['lrd'], weight_decay=opt['l2'], L=opt['L'],
-            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'],
+            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'], num_batches=len(loaders[0]['train']),
             verbose=opt['v'],
             t=0))
 

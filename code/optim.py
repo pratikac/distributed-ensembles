@@ -30,7 +30,7 @@ class DistESGD(object):
 
         defaults = dict(lr=0.1, lrd=0, momentum=0.9, dampening=0,
                 weight_decay=0, nesterov=True, L=25,
-                g0=0.01, g1=1, gdot=1e-3, eps=0,
+                g0=0.01, g1=1, gdot=1e-3, eps=0, num_batches=500,
                 verbose=False,
                 t=0)
 
@@ -67,7 +67,7 @@ class DistESGD(object):
         L = c['L']
         g0 = c['g0']
         g1 = c['g1']
-        gdot = 1e-3
+        gdot = c['gdot']*c['num_batches']
         llr = 0.1
         beta1 = 0.75
         eps = c['eps']
@@ -121,7 +121,7 @@ class DistESGD(object):
             dwc[i].copy_(dw[i])
             mw[i].copy_(w[i])
 
-        gsgld = min(g0*(1+gdot)**state['t'], 1)
+        gsgld = min(g0*(1+gdot)**(state['t']/float(c['num_batches'])), 1)
         for l in xrange(L):
             fs, errs, errs5 = feval()
             for i in xrange(n):
@@ -144,7 +144,7 @@ class DistESGD(object):
         r.copy_(comm.reduce_add(mw, 0)).mul_(1/float(n))
         rc = comm.broadcast(r, ids)
 
-        gesgd = min(g1*(1+gdot)**state['t'], 10)
+        gesgd = min(g1*(1+gdot)**(state['t']/float(c['num_batches'])), 10)
         for i in xrange(n):
             if L > 0:
                 dw[i].copy_(wc[i]-mw[i])
