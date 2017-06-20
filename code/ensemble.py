@@ -36,7 +36,7 @@ opt = add_args([
 ['-L', 25, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
 ['--g1', 1.0, 'elastic gamma'],
-['--gdot', 1e-3, 'gamma dot'],
+['--gdot', 0.5, 'gamma dot'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
