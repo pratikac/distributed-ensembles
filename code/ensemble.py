@@ -59,7 +59,7 @@ if opt['dataset'] == 'imagenet':
 model = models.ReplicateModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
 
-build_filename(opt, blacklist=['lrs', 'optim', 'gpus',
+build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
                             'f','v', 'augment', 't',
                             'save','e','l2','r', 'lr'])
 logger = create_logger(opt)

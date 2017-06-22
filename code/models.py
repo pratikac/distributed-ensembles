@@ -325,6 +325,7 @@ class ReplicateModel(nn.Module):
     def __init__(self, opt, gpus):
         super(ReplicateModel, self).__init__()
 
+        self.gpus = gpus
         self.forloop = False
 
         self.t = 0
@@ -336,10 +337,10 @@ class ReplicateModel(nn.Module):
         self.refid = self.ids[0]
         self.ref = globals()[opt['m']](opt).cuda(self.refid)
 
-        ngpus = th.cuda.device_count()
-        if n == 1 and opt['g'] >= ngpus:
+        if n == 1 and opt['g'] >= len(gpus):
             print 'Using DataParallel...'
-            self.w[0] = nn.DataParallel(self.w[0], device_ids=range(ngpus))
+            self.w[0] = nn.DataParallel(self.w[0], device_ids=gpus)
+            self.ref = nn.DataParallel(self.ref, device_ids=gpus)
 
     def forward(self, xs, ys):
         if not self.forloop:
