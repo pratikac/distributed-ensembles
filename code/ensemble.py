@@ -30,7 +30,6 @@ opt = add_args([
 ['--l2', -1., 'ell-2'],
 ['-B', 100, 'Max epochs'],
 ['--lr', 0.1, 'learning rate'],
-['--lrd', 0., 'lrd'],
 ['--lrs', '', 'learning rate schedule'],
 ['-n', 1, 'replicas'],
 ['-L', 25, 'sgld iterations'],
@@ -60,7 +59,7 @@ if opt['dataset'] == 'imagenet':
 model = models.ReplicateModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
 
-build_filename(opt, blacklist=['lrs', 'optim', 'lrd', 'gpus',
+build_filename(opt, blacklist=['lrs', 'optim', 'gpus',
                             'f','v', 'augment', 't',
                             'save','e','l2','r', 'lr'])
 logger = create_logger(opt)
@@ -72,7 +71,7 @@ for i in xrange(opt['n']):
     loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
 
 optimizer = getattr(optim, opt['optim'])(model, config =
-        dict(lr=opt['lr'], lrd=opt['lrd'], weight_decay=opt['l2'], L=opt['L'],
+        dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'],
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'], num_batches=len(loaders[0]['train']),
             verbose=opt['v'],
             t=0))
@@ -211,12 +210,20 @@ def save_ensemble(e):
         return
 
     loc = opt.get('o','/local2/pratikac/results')
+    dirloc = os.path.join(loc, opt['m'], opt['filename'])
+    if not os.path.isdir(dirloc):
+        os.makedirs(dirloc)
+
+    r = gitrev(opt)
+    meta = dict(SHA=r[0], STATUS=r[1], DIFF=r[2])
     th.save(dict(
+            meta = meta,
+            opt=json.dumps(opt),
             ref=model.ref.state_dict(),
             w = [model.w[i].state_dict() for i in xrange(opt['n'])],
             e=e,
             t=optimizer.state['t']),
-            os.path.join(loc, opt['filename']+'.pz'))
+            os.path.join(dirloc, str(e) + '.pz'))
 
 if not opt['r'] == '':
     print('Loading model from: ', opt['r'])
@@ -228,14 +235,14 @@ if not opt['r'] == '':
         model.w[i] = model.w[i].cuda(model.ids[i])
     opt['e'] = d['e'] + 1
 
-    print('Loading new optimizer')
-    optimizer = optim.DistESGD(config =
+    print('[Loading new optimizer]')
+    optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'],
-            g0 = opt['g0'], g1 = opt['g1'],
+            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'], num_batches=len(loaders[0]['train']),
             verbose=opt['v'],
             t=d['t']))
 
-    print('Loaded model, validation')
+    print('[Loaded model, check validation error]')
     val(opt['e'])
 
 for e in xrange(opt['e'], opt['B']):
