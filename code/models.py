@@ -336,6 +336,11 @@ class ReplicateModel(nn.Module):
         self.refid = self.ids[0]
         self.ref = globals()[opt['m']](opt).cuda(self.refid)
 
+        ngpus = th.cuda.device_count()
+        if n == 1 and opt['g'] >= ngpus:
+            print 'Using DataParallel...'
+            self.w[0] = nn.DataParallel(self.w[0], device_ids=range(ngpus))
+
     def forward(self, xs, ys):
         if not self.forloop:
             xs = [[a] for a in xs]
