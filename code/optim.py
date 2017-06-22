@@ -29,7 +29,7 @@ class DistESGD(object):
     def __init__(self, model, config = {}):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0, llr=0.1,
-                weight_decay=0, nesterov=True, L=25,
+                weight_decay=0, nesterov=True, L=25, beta1=0.75,
                 g0=0.01, g1=1, gdot=1e-3, eps=0, num_batches=500,
                 verbose=False,
                 t=0)
@@ -68,7 +68,7 @@ class DistESGD(object):
         g1 = c['g1']
         gdot = c['gdot']/c['num_batches']
         llr = c['llr']
-        beta1 = 0.75
+        beta1 = c['beta1']
         eps = c['eps']
 
         if not 'w' in state:
@@ -194,4 +194,5 @@ class EntropySGD(DistESGD):
 
 class HJ(DistESGD):
     def __init__(self, model, config = {}):
+        config['beta1'] = 0.0
         super(HJ, self).__init__(model, config)
