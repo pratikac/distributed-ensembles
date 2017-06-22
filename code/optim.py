@@ -30,7 +30,7 @@ class DistESGD(object):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0, llr=0.1,
                 weight_decay=0, nesterov=True, L=25, beta1=0.75,
-                g0=0.01, g1=1, gdot=1e-3, eps=0, num_batches=500,
+                g0=0.01, g1=1, gdot=0.5, eps=0, num_batches=500,
                 verbose=False,
                 t=0)
 
@@ -123,8 +123,9 @@ class DistESGD(object):
             for i in xrange(n):
                 dw[i].add_(gsgld, w[i]-wc[i])
 
-                eta[i].normal_()
-                dw[i].add_(eps, eta[i])
+                if eps > 0:
+                    eta[i].normal_()
+                    dw[i].add_(eps, eta[i])
 
                 if mom > 0:
                     cmdw[i].mul_(mom).add_(1-damp, dw[i])
@@ -168,7 +169,7 @@ class DistESGD(object):
                 debug = dict(
                     dw=dw[i].norm(),
                     dwc=dwc[i].norm(),
-                    de= 1./gesgd*(w[i]-rc[ids[i]]).norm(),
+                    de= 1./gesgd*(w[i]-rc[i]).norm(),
                     dwdwc=th.dot(dw[i], dwc[i])/(dw[i].norm()+e)/(dwc[i].norm()+e),
                     wmu=th.dot(w[i], rc[i])/(w[i].norm()+e)/(rc[i].norm()+e),
                     gsgld=gsgld, gesgd=gesgd)
@@ -191,8 +192,3 @@ class EntropySGD(DistESGD):
     def __init__(self, model, config = {}):
         config['eps'] = 1e-4
         super(EntropySGD, self).__init__(model, config)
-
-class HJ(DistESGD):
-    def __init__(self, model, config = {}):
-        config['beta1'] = 0.0
-        super(HJ, self).__init__(model, config)
