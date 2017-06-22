@@ -28,7 +28,7 @@ def flatten_params(m, fw, fdw):
 class DistESGD(object):
     def __init__(self, model, config = {}):
 
-        defaults = dict(lr=0.1, momentum=0.9, dampening=0,
+        defaults = dict(lr=0.1, momentum=0.9, dampening=0, llr=0.1,
                 weight_decay=0, nesterov=True, L=25,
                 g0=0.01, g1=1, gdot=1e-3, eps=0, num_batches=500,
                 verbose=False,
@@ -67,7 +67,7 @@ class DistESGD(object):
         g0 = c['g0']
         g1 = c['g1']
         gdot = c['gdot']/c['num_batches']
-        llr = 0.1
+        llr = c['llr']
         beta1 = 0.75
         eps = c['eps']
 

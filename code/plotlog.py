@@ -317,4 +317,13 @@ def wrn_cifar100():
     if opt['s']:
         plt.savefig('../fig/wrn_cifar100_fourth_valid.pdf', bbox_inches='tight')
 
+def wrn_svhn():
+    f = rough(df[df['frac'] == 1], 1)
+    plt.figure(f.number)
+    plt.title('Wide-ResNet: SVHN')
+    plt.xlabel('epochs x L')
+    plt.xlim([0, 200])
+    plt.ylim([15, 45])
+    # set_ticks(xt=[0, 50, 100, 150, 200], yt=[15,25,35,45])
+
 globals()[opt['m']]()

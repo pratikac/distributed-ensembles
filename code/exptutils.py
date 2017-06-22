@@ -181,7 +181,7 @@ def dry_feed(m, loader, id=0):
     set_dropout(cache)
 
 
-def lrschedule(opt, e, logger):
+def lrschedule(opt, e, logger=None):
     if opt['lrs'] == '':
         opt['lrs'] = json.dumps([[opt['B'], opt['lr']]])
 
@@ -195,6 +195,6 @@ def lrschedule(opt, e, logger):
     lr = lrs[idx][1]
 
     print('[LR]: ', lr)
-    if opt['l']:
+    if opt['l'] and logger:
         logger.info('[LR] ' + json.dumps({'lr': lr}))
     return lr

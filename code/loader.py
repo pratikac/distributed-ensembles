@@ -210,3 +210,67 @@ def imagenet(opt, only_train=False):
         num_workers=nw, pin_memory=True)
 
     return train_loader.__iter__(), val_loader.__iter__(), val_loader.__iter__(), train_loader.__iter__()
+
+# PTB
+class Dictionary(object):
+    def __init__(self):
+        self.word2idx = {}
+        self.idx2word = []
+
+    def add_word(self, word):
+        if word not in self.word2idx:
+            self.idx2word.append(word)
+            self.word2idx[word] = len(self.idx2word) - 1
+        return self.word2idx[word]
+
+    def __len__(self):
+        return len(self.idx2word)
+
+class Corpus(object):
+    def __init__(self):
+        path = '/local2/pratikac/ptb'
+        self.dictionary = Dictionary()
+        self.train = self.tokenize(os.path.join(path, 'ptb.train.txt'))
+        self.valid = self.tokenize(os.path.join(path, 'ptb.valid.txt'))
+        self.test = self.tokenize(os.path.join(path, 'ptb.test.txt'))
+
+    def tokenize(self, path):
+        assert os.path.exists(path)
+        # Add words to the dictionary
+        with open(path, 'r') as f:
+            tokens = 0
+            for line in f:
+                words = line.split() + ['<eos>']
+                tokens += len(words)
+                for word in words:
+                    self.dictionary.add_word(word)
+
+        with open(path, 'r') as f:
+            ids = th.LongTensor(tokens)
+            token = 0
+            for line in f:
+                words = line.split() + ['<eos>']
+                for word in words:
+                    ids[token] = self.dictionary.word2idx[word]
+                    token += 1
+
+        return ids
+
+def ptb(opt):
+    c = Corpus()
+    b = opt['b']
+
+    def batchify(d):
+        nb = d.size(0) // b
+        d = d.narrow(0, 0, nb*b)
+        d = d.view(b, -1).t().contiguous()
+        return d
+
+    def get_batch(src, i, volatile=False):
+        l = min(opt['T'], len(src)-1-i)
+        return src.narrow(0,i,l), src.narrow(0,i+1, l).view(-1)
+
+    r = {'train': batchify(c.train),
+         'valid': batchify(c.valid),
+         'test': batchify(c.test)}
+    return  c, r, get_batch

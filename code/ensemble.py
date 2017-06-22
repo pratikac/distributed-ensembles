@@ -71,7 +71,7 @@ for i in xrange(opt['n']):
     loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
 
 optimizer = getattr(optim, opt['optim'])(model, config =
-        dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'],
+        dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'], num_batches=len(loaders[0]['train']),
             verbose=opt['v'],
             t=0))
@@ -237,7 +237,7 @@ if not opt['r'] == '':
 
     print('[Loading new optimizer]')
     optimizer = getattr(optim, opt['optim'])(model, config =
-        dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'],
+        dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'], num_batches=len(loaders[0]['train']),
             verbose=opt['v'],
             t=d['t']))
