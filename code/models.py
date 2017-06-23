@@ -323,7 +323,7 @@ class alexnet(nn.Module):
 
 class LSTM(nn.Module):
     def __init__(self, opt):
-        super(RNN, self).__init__()
+        super(LSTM, self).__init__()
         xdim, hdim, nlayers = opt['vocab'], opt['hdim'], opt['layers']
         self.drop = nn.Dropout(opt['d'])
         self.encoder = nn.Embedding(xdim, hdim)
