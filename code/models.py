@@ -345,10 +345,10 @@ class LSTM(nn.Module):
 
     def forward(self, x, h):
         f = self.drop(self.encoder(x))
-        yh, hh = self.rnn(f, h)
+        yh, h = self.rnn(f, h)
         yh = self.drop(yh)
         decoded = self.decoder(yh.view(yh.size(0)*yh.size(1), yh.size(2)))
-        return decoded.view(yh.size(0), yh.size(1), decoded.size(1)), hh
+        return decoded.view(yh.size(0), yh.size(1), decoded.size(1)), h
 
     def init_hidden(self, bsz):
         w = next(self.parameters()).data

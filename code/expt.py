@@ -50,13 +50,14 @@ def train(e):
 
     h = model.init_hidden(opt['b'])
     for bi, idx in enumerate(range(0, ptb['train'].size(0) - 1, opt['T'])):
+        i = int(np.random.random()*maxb)*opt['T']
         _dt = timer()
-        x, y = batcher(ptb['train'], idx)
+        x, y = batcher(ptb['train'], i)
         x, y = Variable(x.cuda()), Variable(y.squeeze().cuda())
 
-        _h = models.repackage_hidden(h)
+        h = models.repackage_hidden(h)
         model.zero_grad()
-        yh, hh = model(x, _h)
+        yh, h = model(x, h)
         _f = criterion(yh.view(-1, opt['vocab']), y)
         _f.backward()
 
@@ -90,7 +91,7 @@ def val(e, src):
                 Variable(y.squeeze().cuda(), volatile=True)
 
         h = models.repackage_hidden(h)
-        yh,hh = model(x, h)
+        yh, h = model(x, h)
         _f = criterion(yh.view(-1, opt['vocab']), y).data[0]
         f = f + _f*len(x)
         #print(i, _f, len(x))
