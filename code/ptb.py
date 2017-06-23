@@ -102,7 +102,7 @@ def train(e):
 
                 for i in xrange(n):
                     # get batch and reset hidden state if dataset ends
-                    x, y = batcher[i](ptb[i]['train'], bids[i])
+                    x, y = batcher[i](ptb[i]['train'], bids[i]*opt['T'])
                     bids[i] += 1
                     if bids[i] > maxb:
                         bids[i] = 0
@@ -135,7 +135,6 @@ def train(e):
 
         # fs, _, _ = optimizer.step(helper())
         fs, _, _ = helper()()
-        print(fs)
 
         f.update(np.mean(fs), bsz)
         fstd.update(np.std(fs), bsz)

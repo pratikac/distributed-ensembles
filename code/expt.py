@@ -50,10 +50,9 @@ def train(e):
 
     h = model.init_hidden(opt['b'])
     for bi, idx in enumerate(range(0, ptb['train'].size(0) - 1, opt['T'])):
-        i = int(np.random.random()*maxb)*opt['T']
         _dt = timer()
-        x, y = batcher(ptb['train'], i)
-        x, y = Variable(x.cuda()), Variable(y.squeeze().cuda())
+        x, y = batcher(ptb['train'], idx)
+        x, y = Variable(x.cuda()), Variable(y.cuda())
 
         h = models.repackage_hidden(h)
         model.zero_grad()
