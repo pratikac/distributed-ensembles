@@ -66,9 +66,14 @@ logger = create_logger(opt)
 pprint(opt)
 
 loaders = []
-for i in xrange(opt['n']):
+if opt['frac'] > 1-1e-12:
     tr,v,te,trf = getattr(loader, opt['dataset'])(opt)
-    loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
+    for i in xrange(opt['n']):
+        loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
+else:
+    for i in xrange(opt['n']):
+        tr,v,te,trf = getattr(loader, opt['dataset'])(opt)
+        loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
 
 optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'], llr=lrschedule(opt, opt['e']),
