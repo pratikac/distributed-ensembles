@@ -270,6 +270,6 @@ def ptb(opt):
         return src[i:i+l], src[i+1:i+1+l].view(-1)
 
     r = {'train': batchify(c.train, opt['b']),
-         'valid': batchify(c.valid, opt['b']),
-         'test': batchify(c.test, opt['b'])}
+        'valid': batchify(c.valid, opt['b']),
+        'test': batchify(c.test, opt['b'])}
     return  c, r, get_batch

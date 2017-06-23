@@ -18,13 +18,13 @@ from copy import deepcopy
 
 opt = add_args([
 ['-o', '/local2/pratikac/results', 'output'],
-['-m', 'lenet', 'lenet | mnistfc | allcnn | wideresnet'],
+['-m', 'ptbs', 'ptbs | ptbl'],
 ['--dataset', 'ptb', 'ptb'],
 ['-g', 3, 'gpu idx'],
 ['--gpus', '', 'groups of gpus'],
 ['-b', 20, 'batch_size'],
 ['-e', 0, 'start epoch'],
-['--optim', 'DistESGD', 'optim: DistESGD | SGD | HJ | ElasticSGD | EntropySGD'],
+['--optim', 'SGD', 'optim: DistESGD | SGD | HJ | ElasticSGD | EntropySGD'],
 ['--l2', -1., 'ell-2'],
 ['-B', 40, 'Max epochs'],
 ['-T', 35, 'bptt'],
@@ -54,7 +54,9 @@ if not opt['gpus'] == '':
 setup(  t=4, s=opt['s'],
         gpus=gpus)
 
-corpus, ptb, batcher = loader.ptb(opt)
+corpus, ptb, batcher = None, [None]*opt['n'], [None]*opt['n']
+for i in xrange(opt['n']):
+    corpus, ptb[i], batcher[i] = loader.ptb(opt)
 opt['vocab'] = len(corpus.dictionary)
 
 model = models.ReplicateModel(opt, gpus=gpus)
@@ -70,7 +72,7 @@ optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=0.0,
             L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'],
-            num_batches=(ptb['train'].size(0) -1) // opt['T'],
+            num_batches=(ptb[0]['train'].size(0) -1) // opt['T'],
             verbose=opt['v'],
             t=0))
 
@@ -82,30 +84,37 @@ def train(e):
     fstd, perpstd = AverageMeter(), AverageMeter()
 
     bsz = opt['b']
-    maxb = (ptb['train'].size(0) -1) // opt['T']
+    maxb = (ptb[0]['train'].size(0) -1) // opt['T']
     t0 = timer()
 
     n = opt['n']
     ids = deepcopy(model.ids)
 
     h = [model.w[i].init_hidden(opt['b']) for i in xrange(n)]
+    bids = [0 for i in xrange(n)]
+
     for bi in xrange(maxb):
         _dt = timer()
         def helper():
             def feval():
-                xs, ys, yhs, hhs = [None]*n, [None]*n, [None]*n, [None]*n
+                xs, ys, yhs = [None]*n, [None]*n, [None]*n
                 fs = [None]*n
 
                 for i in xrange(n):
-                    idx = int(np.random.random()*maxb)*opt['T']
-                    x, y = batcher(ptb['train'], idx)
+                    # get batch and reset hidden state if dataset ends
+                    x, y = batcher[i](ptb[i]['train'], bids[i])
+                    bids[i] += 1
+                    if bids[i] > maxb:
+                        bids[i] = 0
+                        h[i] = model.w[i].init_hidden(opt['b'])
 
                     xs[i], ys[i] =  Variable(x.cuda(ids[i], async=True)), \
-                            Variable(y.squeeze().cuda(ids[i], async=True))
+                            Variable(y.cuda(ids[i], async=True))
+                    h[i] = models.repackage_hidden(h[i])
 
-                _h = [models.repackage_hidden(h[i]) for i in xrange(n)]
                 for i in xrange(n):
-                    yhs[i], hhs[i] = model.w[i](xs[i], _h[i])
+                    yhs[i], h[i] = model.w[i](xs[i], h[i])
+                th.cuda.synchronize()
 
                 for i in xrange(n):
                     fs[i] = criterion.cuda(ids[i])(yhs[i].view(-1, opt['vocab']), ys[i])
@@ -115,26 +124,33 @@ def train(e):
                 for i in xrange(n):
                     nn.utils.clip_grad_norm(model.w[i].parameters(), opt['clip'])
 
-                fs = [fs[i].data[0] for i in xrange(n)]
-                perps = [math.exp(f) for f in fs]
-                return fs, perps, None
+                for i in xrange(n):
+                    for p in model.w[i].parameters():
+                        p.data.add_(-optimizer.config['lr'], p.grad.data)
+                for p1, p2 in zip(model.ref.parameters(), model.w[0].parameters()):
+                    p1.data.copy_(p2.data)
+
+                return [fs[i].data[0] for i in xrange(n)], None, None
             return feval
 
-        fs, perps, _ = optimizer.step(helper())
+        # fs, _, _ = optimizer.step(helper())
+        fs, _, _ = helper()()
+        print(fs)
 
         f.update(np.mean(fs), bsz)
         fstd.update(np.std(fs), bsz)
 
-        perp.update(np.mean(perps), bsz)
-        perpstd.update(np.std(perps), bsz)
+        perp.update(np.mean(np.exp(fs)), bsz)
+        perpstd.update(np.std(np.exp(fs)), bsz)
+
         dt.update(timer()-_dt, 1)
 
         if opt['l']:
-            s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), perp=np.mean(perps),
-                    fstd=np.std(fs), perpstd=np.std(perps), dt=dt.avg)
+            s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), perp=np.mean(np.exp(fs)),
+                    fstd=np.std(fs), perpstd=np.std(np.exp(fs)), dt=dt.avg)
             logger.info('[LOG] ' + json.dumps(s))
 
-        if bi % 250 == 0 and bi != 0:
+        if bi % 200 == 0 and bi != 0:
             print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f'))%(dt.avg,
                 e,bi,maxb, f.avg, fstd.avg, perp.avg, perpstd.avg))
 
@@ -155,20 +171,20 @@ def val(e, src):
     rid = model.refid
     model.eval()
 
+    bsz = opt['b']
     h = model.ref.init_hidden(opt['b'])
     f, perp = AverageMeter(), AverageMeter()
 
-    for bi in xrange(0, ptb[src].size(0)-1, opt['T']):
+    for bi in xrange(0, ptb[0][src].size(0)-1, opt['T']):
 
-        x,y = batcher(ptb[src], bi)
+        x,y = batcher[0](ptb[0][src], bi)
         bsz = x.size(0)
 
         x,y = Variable(x.cuda(rid, async=True), volatile=True), \
-                Variable(y.squeeze().cuda(rid, async=True), volatile=True)
+                Variable(y.cuda(rid, async=True), volatile=True)
 
-        model.ref.zero_grad()
         h = models.repackage_hidden(h)
-        yh,hh = model.ref(x, h)
+        yh,h = model.ref(x, h)
         _f = criterion.cuda(rid)(yh.view(-1, opt['vocab']), y).data[0]
 
         f.update(_f, bsz)
@@ -220,7 +236,7 @@ if not opt['r'] == '':
         dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=0.0,
             L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'],
-            num_batches=(ptb['train'].size(0) -1) // opt['T'],
+            num_batches=(ptb[0]['train'].size(0) -1) // opt['T'],
             verbose=opt['v'],
             t=d['t']))
 
