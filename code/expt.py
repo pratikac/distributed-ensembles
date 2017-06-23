@@ -93,7 +93,7 @@ def val(e, src):
         yh, h = model(x, h)
         _f = criterion(yh.view(-1, opt['vocab']), y).data[0]
         f = f + _f*len(x)
-        #print(i, _f, len(x))
+        print(i, _f, len(x))
 
     f = f/len(ptb[src])
     print((color('red', '**[%2d] %2.4f %2.4f\n'))%(e, f, math.exp(f)))

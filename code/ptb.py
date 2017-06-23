@@ -92,6 +92,7 @@ def train(e):
 
     h = [model.w[i].init_hidden(opt['b']) for i in xrange(n)]
     bids = [0 for i in xrange(n)]
+    total_loss = 0
 
     for bi in xrange(maxb):
         _dt = timer()
@@ -114,33 +115,31 @@ def train(e):
 
                 for i in xrange(n):
                     yhs[i], h[i] = model.w[i](xs[i], h[i])
-                th.cuda.synchronize()
 
                 for i in xrange(n):
                     fs[i] = criterion.cuda(ids[i])(yhs[i].view(-1, opt['vocab']), ys[i])
 
                 model.backward(fs)
+                th.cuda.synchronize()
 
                 for i in xrange(n):
                     nn.utils.clip_grad_norm(model.w[i].parameters(), opt['clip'])
-
-                for i in xrange(n):
-                    for p in model.w[i].parameters():
-                        p.data.add_(-optimizer.config['lr'], p.grad.data)
-                for p1, p2 in zip(model.ref.parameters(), model.w[0].parameters()):
-                    p1.data.copy_(p2.data)
+                #     for p in model.w[i].parameters():
+                #         p.data.add_(-optimizer.config['lr'], p.grad.data)
+                # for p1, p2 in zip(model.ref.parameters(), model.w[0].parameters()):
+                #     p1.data.copy_(p2.data)
 
                 return [fs[i].data[0] for i in xrange(n)], None, None
             return feval
 
-        # fs, _, _ = optimizer.step(helper())
-        fs, _, _ = helper()()
+        fs, _, _ = optimizer.step(helper())
+        #fs, _, _ = helper()()
 
-        f.update(np.mean(fs), bsz)
-        fstd.update(np.std(fs), bsz)
+        f.update(np.mean(fs))
+        fstd.update(np.std(fs))
 
-        perp.update(np.mean(np.exp(fs)), bsz)
-        perpstd.update(np.std(np.exp(fs)), bsz)
+        perp.update(np.mean(np.exp(fs)))
+        perpstd.update(np.std(np.exp(fs)))
 
         dt.update(timer()-_dt, 1)
 
@@ -163,41 +162,42 @@ def train(e):
         f.avg, fstd.avg, perp.avg, perpstd.avg, timer()-t0))
     print()
 
+        # total_loss = total_loss + fs[0]
+        # bif = 200
+        # if bi % bif == 0 and bi > 0:
+        #     curr_loss = total_loss/float(bif)
+        #     print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f %2.2f'))%(dt.avg,
+        #         e,bi,maxb, curr_loss, math.exp(curr_loss)))
+        #     total_loss = 0
+
 def val(e, src):
     n = opt['n']
-    ids = deepcopy(model.ids)
 
     rid = model.refid
-    model.eval()
+    model.ref.eval()
 
-    bsz = opt['b']
     h = model.ref.init_hidden(opt['b'])
-    f, perp = AverageMeter(), AverageMeter()
+    f = 0
 
-    for bi in xrange(0, ptb[0][src].size(0)-1, opt['T']):
+    for i in range(0, ptb[0][src].size(0)-1, opt['T']):
+        x,y = batcher[0](ptb[0][src], i)
 
-        x,y = batcher[0](ptb[0][src], bi)
-        bsz = x.size(0)
-
-        x,y = Variable(x.cuda(rid, async=True), volatile=True), \
-                Variable(y.cuda(rid, async=True), volatile=True)
+        x,y = Variable(x.cuda(rid), volatile=True), \
+                Variable(y.cuda(rid), volatile=True)
 
         h = models.repackage_hidden(h)
         yh,h = model.ref(x, h)
         _f = criterion.cuda(rid)(yh.view(-1, opt['vocab']), y).data[0]
+        f = f + _f*len(x)
+        #print(i, _f, len(x))
 
-        f.update(_f, bsz)
-        perp.update(math.exp(_f), bsz)
-
-        if bi % 250 == 0 and bi != 0:
-            print((color('red', '*[%d][%2d] %2.4f %2.4f'))%(e, bi, f.avg, perp.avg))
-
+    f = f/len(ptb[0][src])
     if opt['l']:
-        s = dict(e=e, i=0, f=f.avg, perp=perp.avg, val=True)
+        s = dict(e=e, i=0, f=f, perp=math.exp(f), val=True)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
-    print((color('red', '**[%2d] %2.4f %2.4f\n'))%(e, f.avg, perp.avg))
+    print((color('red', '**[%2d] %2.4f %2.4f\n'))%(e, f, math.exp(f)))
     print('')
 
 def save_ensemble(e):
@@ -242,6 +242,7 @@ if not opt['r'] == '':
     print('[Loaded model, check validation error]')
     val(opt['e'])
 
+#val(0, 'valid')
 for e in xrange(opt['e'], opt['B']):
     train(e)
     val(e, 'valid')
