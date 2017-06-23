@@ -105,12 +105,11 @@ def train(e):
 
                 _h = [models.repackage_hidden(h[i]) for i in xrange(n)]
                 for i in xrange(n):
-                    model.w[i].zero_grad()
                     yhs[i], hhs[i] = model.w[i](xs[i], _h[i])
-                th.cuda.synchronize()
 
                 for i in xrange(n):
                     fs[i] = criterion.cuda(ids[i])(yhs[i].view(-1, opt['vocab']), ys[i])
+
                 model.backward(fs)
 
                 for i in xrange(n):
@@ -160,7 +159,6 @@ def val(e, src):
     f, perp = AverageMeter(), AverageMeter()
 
     for bi in xrange(0, ptb[src].size(0)-1, opt['T']):
-        _h = models.repackage_hidden(h)
 
         x,y = batcher(ptb[src], bi)
         bsz = x.size(0)
@@ -169,7 +167,8 @@ def val(e, src):
                 Variable(y.squeeze().cuda(rid, async=True), volatile=True)
 
         model.ref.zero_grad()
-        yh,hh = model.ref(x, _h)
+        h = models.repackage_hidden(h)
+        yh,hh = model.ref(x, h)
         _f = criterion.cuda(rid)(yh.view(-1, opt['vocab']), y).data[0]
 
         f.update(_f, bsz)

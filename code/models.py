@@ -321,30 +321,24 @@ class alexnet(nn.Module):
     def forward(self, x):
         return self.m(x)
 
-
-class RNN(nn.Module):
+class LSTM(nn.Module):
     def __init__(self, opt):
         super(RNN, self).__init__()
-        xdim, hdim, nlayers = opt['vocab'], opt['hdim'], \
-                opt.get('layers',2)
-        self.encoder = nn.Embedding(xdim, hdim)
-        self.rnn = getattr(nn, opt['m'])(hdim, hdim, nlayers,
-                    dropout=opt['d'])
-        self.decoder = nn.Linear(hdim, xdim)
+        xdim, hdim, nlayers = opt['vocab'], opt['hdim'], opt['layers']
         self.drop = nn.Dropout(opt['d'])
+        self.encoder = nn.Embedding(xdim, hdim)
+        self.rnn = nn.LSTM(hdim, hdim, nlayers, dropout=opt['d'])
+        self.decoder = nn.Linear(hdim, xdim)
 
-        if opt['tie']:
-            self.decoder.weight = self.encoder.weight
+        # tie weights
+        self.decoder.weight = self.encoder.weight
         self.init_weights()
 
-        self.rnn_type = opt['m']
         self.hdim = hdim
         self.nlayers = nlayers
 
-        print opt
-
     def init_weights(self):
-        dw = 0.1
+        dw = 0.01
         self.encoder.weight.data.uniform_(-dw, dw)
         self.decoder.bias.data.fill_(0)
         self.decoder.weight.data.uniform_(-dw, dw)
@@ -358,34 +352,24 @@ class RNN(nn.Module):
 
     def init_hidden(self, bsz):
         w = next(self.parameters()).data
-        if self.rnn_type == 'LSTM':
-            return (Variable(w.new(self.nlayers, bsz, self.hdim).zero_()),
-                    Variable(w.new(self.nlayers, bsz, self.hdim).zero_()))
-        else:
-            return Variable(w.new(self.nlayers, bsz, self.hdim).zero_())
+        return (Variable(w.new(self.nlayers, bsz, self.hdim).zero_()),
+                Variable(w.new(self.nlayers, bsz, self.hdim).zero_()))
 
 def repackage_hidden(h):
-    """Wraps hidden states in new Variables, to detach them from their history."""
     if type(h) == Variable:
         return Variable(h.data)
     else:
         return tuple(repackage_hidden(v) for v in h)
 
-class ptbs(RNN):
+class ptbs(LSTM):
     name = 'ptbs'
-    def __init__(self, opt={}):
-        hdim = 200
-        d = 0.2
-        super(ptbs, self).__init__(dict(vocab=opt['vocab'], hdim=hdim, layers=2,
-                d=d, tie=True, m='LSTM'))
+    def __init__(self, opt):
+        super(ptbs, self).__init__(dict(vocab=opt['vocab'], hdim=200, layers=2, d=0.2))
 
-class ptbl(RNN):
+class ptbl(LSTM):
     name = 'ptbl'
     def __init__(self, opt):
-        hdim = 1500
-        d = 0.65
-        super(ptbl, self).__init__(dict(vocab=opt['vocab'], hdim=hdim, layers=2,
-                d=d, tie=True, m='LSTM'))
+        super(ptbl, self).__init__(dict(vocab=opt['vocab'], hdim=1500, layers=2, d=0.65))
 
 class ReplicateModel(nn.Module):
     def __init__(self, opt, gpus):

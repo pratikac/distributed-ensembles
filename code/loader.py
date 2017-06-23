@@ -258,19 +258,18 @@ class Corpus(object):
 
 def ptb(opt):
     c = Corpus()
-    bsz = opt['b']
 
-    def batchify(d):
+    def batchify(d, bsz):
         nb = d.size(0) // bsz
         d = d.narrow(0, 0, nb*bsz)
         d = d.view(bsz, -1).t().contiguous()
         return d
 
-    def get_batch(src, i, volatile=False):
+    def get_batch(src, i):
         l = min(opt['T'], len(src)-1-i)
-        return src.narrow(0,i,l), src.narrow(0,i+1, l).view(-1)
+        return src[i:i+l], src[i+1:i+1+l].view(-1)
 
-    r = {'train': batchify(c.train),
-         'valid': batchify(c.valid),
-         'test': batchify(c.test)}
+    r = {'train': batchify(c.train, opt['b']),
+         'valid': batchify(c.valid, opt['b']),
+         'test': batchify(c.test, opt['b'])}
     return  c, r, get_batch
