@@ -28,7 +28,7 @@ opt = add_args([
 ['--l2', -1., 'ell-2'],
 ['-B', 40, 'Max epochs'],
 ['-T', 35, 'bptt'],
-['--lr', 0.1, 'learning rate'],
+['--lr', 20.0, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
 ['--clip', 0.25, 'gradient clipping'],
 ['-n', 1, 'replicas'],
@@ -67,8 +67,10 @@ logger = create_logger(opt)
 pprint(opt)
 
 optimizer = getattr(optim, opt['optim'])(model, config =
-        dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'], llr=lrschedule(opt, opt['e']),
-            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'], num_batches=(ptb['train'].size(0) -1) // opt['T'],
+        dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=0.0,
+            L=opt['L'], llr=lrschedule(opt, opt['e']),
+            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'],
+            num_batches=(ptb['train'].size(0) -1) // opt['T'],
             verbose=opt['v'],
             t=0))
 
@@ -103,6 +105,7 @@ def train(e):
 
                 _h = [models.repackage_hidden(h[i]) for i in xrange(n)]
                 for i in xrange(n):
+                    model.w[i].zero_grad()
                     yhs[i], hhs[i] = model.w[i](xs[i], _h[i])
                 th.cuda.synchronize()
 
@@ -132,8 +135,7 @@ def train(e):
                     fstd=np.std(fs), perpstd=np.std(perps), dt=dt.avg)
             logger.info('[LOG] ' + json.dumps(s))
 
-        bif = int(5/dt.avg)+1
-        if bi % bif == 0 and bi != 0:
+        if bi % 250 == 0 and bi != 0:
             print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f'))%(dt.avg,
                 e,bi,maxb, f.avg, fstd.avg, perp.avg, perpstd.avg))
 
@@ -166,13 +168,14 @@ def val(e, src):
         x,y = Variable(x.cuda(rid, async=True), volatile=True), \
                 Variable(y.squeeze().cuda(rid, async=True), volatile=True)
 
-        yh,hh = model.ref(x, h)
+        model.ref.zero_grad()
+        yh,hh = model.ref(x, _h)
         _f = criterion.cuda(rid)(yh.view(-1, opt['vocab']), y).data[0]
 
         f.update(_f, bsz)
         perp.update(math.exp(_f), bsz)
 
-        if bi % 100 == 0 and bi != 0:
+        if bi % 250 == 0 and bi != 0:
             print((color('red', '*[%d][%2d] %2.4f %2.4f'))%(e, bi, f.avg, perp.avg))
 
     if opt['l']:
@@ -215,8 +218,10 @@ if not opt['r'] == '':
 
     print('[Loading new optimizer]')
     optimizer = getattr(optim, opt['optim'])(model, config =
-        dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'], llr=lrschedule(opt, opt['e']),
-            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'], num_batches=(ptb['train'].size(0) -1) // opt['T'],
+        dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=0.0,
+            L=opt['L'], llr=lrschedule(opt, opt['e']),
+            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'],
+            num_batches=(ptb['train'].size(0) -1) // opt['T'],
             verbose=opt['v'],
             t=d['t']))
 

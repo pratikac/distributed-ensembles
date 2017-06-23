@@ -258,12 +258,12 @@ class Corpus(object):
 
 def ptb(opt):
     c = Corpus()
-    b = opt['b']
+    bsz = opt['b']
 
     def batchify(d):
-        nb = d.size(0) // b
-        d = d.narrow(0, 0, nb*b)
-        d = d.view(b, -1).t().contiguous()
+        nb = d.size(0) // bsz
+        d = d.narrow(0, 0, nb*bsz)
+        d = d.view(bsz, -1).t().contiguous()
         return d
 
     def get_batch(src, i, volatile=False):

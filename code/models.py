@@ -323,7 +323,6 @@ class alexnet(nn.Module):
 
 
 class RNN(nn.Module):
-    """Container module with an encoder, a recurrent module, and a decoder."""
     def __init__(self, opt):
         super(RNN, self).__init__()
         xdim, hdim, nlayers = opt['vocab'], opt['hdim'], \
@@ -341,6 +340,8 @@ class RNN(nn.Module):
         self.rnn_type = opt['m']
         self.hdim = hdim
         self.nlayers = nlayers
+
+        print opt
 
     def init_weights(self):
         dw = 0.1
@@ -376,7 +377,7 @@ class ptbs(RNN):
         hdim = 200
         d = 0.2
         super(ptbs, self).__init__(dict(vocab=opt['vocab'], hdim=hdim, layers=2,
-            d=d, tie=True, m='LSTM'))
+                d=d, tie=True, m='LSTM'))
 
 class ptbl(RNN):
     name = 'ptbl'
