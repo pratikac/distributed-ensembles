@@ -4,190 +4,227 @@ import torch as th
 import torch.nn as nn
 from torch.autograd import Variable
 from timeit import default_timer as timer
-import torch.backends.cudnn as cudnn
+import torch.nn.functional as F
+from torch.nn.parallel import scatter, parallel_apply, gather
 
 from exptutils import *
 import models, loader, optim
 import numpy as np
 import logging
 from pprint import pprint
+import pdb, glob, sys
+from collections import OrderedDict
+from copy import deepcopy
 
 opt = add_args([
 ['-o', '/local2/pratikac/results', 'output'],
-['-m', 'ptbs', 'ptbs | ptbl'],
-['--hdim', 200, 'hdim'],
-['-d', 0.2, 'dropout'],
-['--optim', 'ESGD', 'ESGD | HJB | PME | FB | LL | PMEAVG | SGLD | SGD'],
+['-m', 'lenet', 'lenet | mnistfc | allcnn | wideresnet'],
+['--dataset', 'ptb', 'ptb'],
+['-g', 3, 'gpu idx'],
+['--gpus', '', 'groups of gpus'],
 ['-b', 20, 'batch_size'],
 ['-e', 0, 'start epoch'],
-['-T', 35, 'bptt'],
+['--optim', 'DistESGD', 'optim: DistESGD | SGD | HJ | ElasticSGD | EntropySGD'],
+['--l2', -1., 'ell-2'],
 ['-B', 40, 'Max epochs'],
-['--lr', 20, 'learning rate'],
-['--l2', 0.0, 'ell-2'],
-['--clip', 0.25, 'gradient clipping'],
+['-T', 35, 'bptt'],
+['--lr', 0.1, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
-['-L', 0, 'sgld iterations'],
-['--eps', 1e-4, 'sgld noise'],
-['--g0', 1e-4, 'gamma'],
-['--g1', 0.0, 'scoping'],
+['--clip', 0.25, 'gradient clipping'],
+['-n', 1, 'replicas'],
+['-L', 25, 'sgld iterations'],
+['--g0', 0.01, 'SGLD gamma'],
+['--g1', 1.0, 'elastic gamma'],
+['--gdot', 0.5, 'gamma dot'],
 ['-s', 42, 'seed'],
-['-g', 2, 'gpu idx'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
 ['-v', False, 'verbose'],
-['--retrain', '', 'checkpoint'],
-['--validate', '', 'validate a checkpoint'],
-['--save', False, 'save network']
+['-r', '', 'resume ckpt'],
+['--save', False, 'save ckpt'],
 ])
-if opt['L'] > 0:
-    opt['f'] = 1
-if opt['l']:
+
+if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
 
-th.set_num_threads(2)
-if opt['g'] in [0, 1, 2]:
-    th.cuda.set_device(opt['g'])
-random.seed(opt['s'])
-np.random.seed(opt['s'])
-th.manual_seed(opt['s'])
-th.cuda.manual_seed_all(opt['s'])
-cudnn.benchmark = True
+ngpus = th.cuda.device_count()
+gpus = [i if opt['g'] >= ngpus else opt['g'] for i in xrange(ngpus)]
+if not opt['gpus'] == '':
+    gpus = json.loads(opt['gpus'])
+setup(  t=4, s=opt['s'],
+        gpus=gpus)
 
-corpus, ptb, loader = loader.ptb(opt)
+corpus, ptb, batcher = loader.ptb(opt)
 opt['vocab'] = len(corpus.dictionary)
-model = getattr(models, opt['m'])(opt)
-if opt['g'] > 2:
-    model = th.nn.DataParallel(model)
-model = model.cuda()
-criterion = nn.CrossEntropyLoss().cuda()
-optimizer = getattr(optim, opt['optim'])(model.parameters(),
-        config = dict(lr=opt['lr'], momentum=0.0, nesterov=True, weight_decay=opt['l2'],
-        L=opt['L'], eps=opt['eps'], g0=opt['g0'], g1=opt['g1'], verbose=opt['v']))
 
-ckpt = None
-if not opt['retrain'] == '':
-    ckpt = th.load(opt['retrain'])
-if not opt['validate'] == '':
-    ckpt = th.load(opt['retrain'])
+model = models.ReplicateModel(opt, gpus=gpus)
+criterion = nn.CrossEntropyLoss()
 
-if ckpt is not None:
-    model.load_state_dict(ckpt['state_dict'])
-    print('Loading model: %s'%ckpt['name'])
-
-build_filename(opt, blacklist=['lrs','retrain', 'f','v', \
-                            'save','e','validate','eps','T',
-                            'vocab', 'l2'])
+build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
+                            'f','v', 'augment', 't',
+                            'save','e','l2','r', 'lr'])
 logger = create_logger(opt)
 pprint(opt)
 
-def schedule(e):
-    if opt['lrs'] == '':
-        opt['lrs'] = json.dumps([[opt['B'], opt['lr']]])
-
-    lrs = json.loads(opt['lrs'])
-
-    idx = len(lrs)-1
-    for i in xrange(len(lrs)):
-        if e < lrs[i][0]:
-            idx = i
-            break
-    lr = lrs[idx][1]
-
-    print('[LR]: ', lr)
-    if opt['l']:
-        logger.info('[LR] ' + json.dumps({'lr': lr}))
-    optimizer.config['lr'] = lr
+optimizer = getattr(optim, opt['optim'])(model, config =
+        dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'], llr=lrschedule(opt, opt['e']),
+            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'], num_batches=(ptb['train'].size(0) -1) // opt['T'],
+            verbose=opt['v'],
+            t=0))
 
 def train(e):
-    #schedule(e)
-
+    optimizer.config['lr'] = lrschedule(opt, e, logger)
     model.train()
 
-    fs,perp = AverageMeter(), AverageMeter()
-    ts = timer()
+    f, perp, dt = AverageMeter(), AverageMeter(), AverageMeter()
+    fstd, perpstd = AverageMeter(), AverageMeter()
 
     bsz = opt['b']
     maxb = (ptb['train'].size(0) -1) // opt['T']
+    t0 = timer()
 
-    h = model.init_hidden(opt['b'])
+    n = opt['n']
+    ids = deepcopy(model.ids)
+
+    h = [model.w[i].init_hidden(opt['b']) for i in xrange(n)]
     for bi in xrange(maxb):
+        _dt = timer()
         def helper():
-            def feval(bprop=True):
-                idx = int(np.random.random()*maxb)*opt['T']
+            def feval():
+                xs, ys, yhs, hhs = [None]*n, [None]*n, [None]*n, [None]*n
+                fs = [None]*n
 
-                x,y = loader(ptb['train'], idx)
-                x, y = Variable(x.cuda()), Variable(y.squeeze().cuda())
-                bsz = x.size(0)
+                for i in xrange(n):
+                    idx = int(np.random.random()*maxb)*opt['T']
+                    x, y = batcher(ptb['train'], idx)
 
-                _h = models.repackage_hidden(h)
+                    xs[i], ys[i] =  Variable(x.cuda(ids[i], async=True)), \
+                            Variable(y.squeeze().cuda(ids[i], async=True))
 
-                model.zero_grad()
-                yh, hh = model(x, _h)
-                f = criterion(yh.view(-1, opt['vocab']), y)
-                if bprop:
-                    f.backward()
+                _h = [models.repackage_hidden(h[i]) for i in xrange(n)]
+                for i in xrange(n):
+                    yhs[i], hhs[i] = model.w[i](xs[i], _h[i])
+                th.cuda.synchronize()
 
-                nn.utils.clip_grad_norm(model.parameters(), opt['clip'])
+                for i in xrange(n):
+                    fs[i] = criterion.cuda(ids[i])(yhs[i].view(-1, opt['vocab']), ys[i])
+                model.backward(fs)
 
-                f = f.data[0]
-                return (f, math.exp(f))
+                for i in xrange(n):
+                    nn.utils.clip_grad_norm(model.w[i].parameters(), opt['clip'])
+
+                fs = [fs[i].data[0] for i in xrange(n)]
+                perps = [math.exp(f) for f in fs]
+                return fs, perps, None
             return feval
 
-        f, p = optimizer.step(helper(), model, criterion)
-        th.cuda.synchronize()
+        fs, perps, _ = optimizer.step(helper())
 
-        fs.update(f, bsz)
-        perp.update(p, bsz)
+        f.update(np.mean(fs), bsz)
+        fstd.update(np.std(fs), bsz)
+
+        perp.update(np.mean(perps), bsz)
+        perpstd.update(np.std(perps), bsz)
+        dt.update(timer()-_dt, 1)
 
         if opt['l']:
-            s = dict(i=bi + e*maxb, e=e, f=f, perp=p)
+            s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), perp=np.mean(perps),
+                    fstd=np.std(fs), perpstd=np.std(perps), dt=dt.avg)
             logger.info('[LOG] ' + json.dumps(s))
 
-        if bi % 100 == 0 and bi != 0:
-            print((color('blue', '[%2d][%4d/%4d] %2.4f %2.4f'))%(e,bi,maxb,
-                fs.avg, perp.avg))
+        bif = int(5/dt.avg)+1
+        if bi % bif == 0 and bi != 0:
+            print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f'))%(dt.avg,
+                e,bi,maxb, f.avg, fstd.avg, perp.avg, perpstd.avg))
 
     if opt['l']:
-        s = dict(e=e, i=0, f=fs.avg, perp=perp.avg, train=True)
+        s = dict(e=e, i=0, f=f.avg, fstd=fstd.avg, perp=perp.avg, perpstd=perpstd.avg,
+                train=True, t=timer()-t0)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
-    print(  (color('blue', '++[%2d] %2.4f %2.4f [%.2fs]'))% (e,
-            fs.avg, perp.avg, timer()-ts))
+    print((color('blue', '++[%2d] %2.4f+-%2.4f %2.2f+-%2.2f [%2.2fs]'))% (e,
+        f.avg, fstd.avg, perp.avg, perpstd.avg, timer()-t0))
+    print()
 
 def val(e, src):
+    n = opt['n']
+    ids = deepcopy(model.ids)
+
+    rid = model.refid
     model.eval()
 
-    h = model.init_hidden(opt['b'])
-    fs,perp = AverageMeter(), AverageMeter()
+    h = model.ref.init_hidden(opt['b'])
+    f, perp = AverageMeter(), AverageMeter()
 
     for bi in xrange(0, ptb[src].size(0)-1, opt['T']):
-        h = models.repackage_hidden(h)
+        _h = models.repackage_hidden(h)
 
-        x,y = loader(ptb[src], bi)
+        x,y = batcher(ptb[src], bi)
         bsz = x.size(0)
 
-        x,y =   Variable(x.cuda(), volatile=True), \
-                Variable(y.squeeze().cuda(), volatile=True)
-        yh, hh = model(x, h)
+        x,y = Variable(x.cuda(rid, async=True), volatile=True), \
+                Variable(y.squeeze().cuda(rid, async=True), volatile=True)
 
-        f = criterion(yh.view(-1, opt['vocab']), y).data[0]
+        yh,hh = model.ref(x, h)
+        _f = criterion.cuda(rid)(yh.view(-1, opt['vocab']), y).data[0]
 
-        fs.update(f, bsz)
-        perp.update(math.exp(f), bsz)
+        f.update(_f, bsz)
+        perp.update(math.exp(_f), bsz)
+
+        if bi % 100 == 0 and bi != 0:
+            print((color('red', '*[%d][%2d] %2.4f %2.4f'))%(e, bi, f.avg, perp.avg))
 
     if opt['l']:
-        s = dict(e=e, i=0, f=fs.avg, perp=perp.avg, val=True)
+        s = dict(e=e, i=0, f=f.avg, perp=perp.avg, val=True)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
-    print((color('red', '**[%2d] %2.4f %2.4f\n'))%(e, fs.avg, perp.avg))
+    print((color('red', '**[%2d] %2.4f %2.4f\n'))%(e, f.avg, perp.avg))
     print('')
+
+def save_ensemble(e):
+    if not opt['save']:
+        return
+
+    loc = opt.get('o','/local2/pratikac/results')
+    dirloc = os.path.join(loc, opt['m'], opt['filename'])
+    if not os.path.isdir(dirloc):
+        os.makedirs(dirloc)
+
+    r = gitrev(opt)
+    meta = dict(SHA=r[0], STATUS=r[1], DIFF=r[2])
+    th.save(dict(
+            meta = meta,
+            opt=json.dumps(opt),
+            ref=model.ref.state_dict(),
+            w = [model.w[i].state_dict() for i in xrange(opt['n'])],
+            e=e,
+            t=optimizer.state['t']),
+            os.path.join(dirloc, str(e) + '.pz'))
+
+if not opt['r'] == '':
+    print('Loading model from: ', opt['r'])
+    d = th.load(opt['r'])
+    model.ref.load_state_dict(d['ref'])
+    model.ref = model.ref.cuda(model.refid)
+    for i in xrange(opt['n']):
+        model.w[i].load_state_dict(d['w'][i])
+        model.w[i] = model.w[i].cuda(model.ids[i])
+    opt['e'] = d['e'] + 1
+
+    print('[Loading new optimizer]')
+    optimizer = getattr(optim, opt['optim'])(model, config =
+        dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'], llr=lrschedule(opt, opt['e']),
+            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'], num_batches=(ptb['train'].size(0) -1) // opt['T'],
+            verbose=opt['v'],
+            t=d['t']))
+
+    print('[Loaded model, check validation error]')
+    val(opt['e'])
 
 for e in xrange(opt['e'], opt['B']):
     train(e)
-    if e % opt['f'] == opt['f'] -1:
-        val(e, 'valid')
-    if opt['save']:
-        save(model, opt, marker='e_%s'%e)
+    val(e, 'valid')
+    save_ensemble(e)
 val(opt['B']-1, 'test')
