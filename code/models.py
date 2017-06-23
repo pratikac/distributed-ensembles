@@ -338,7 +338,7 @@ class LSTM(nn.Module):
         self.nlayers = nlayers
 
     def init_weights(self):
-        dw = 0.01
+        dw = 0.1
         self.encoder.weight.data.uniform_(-dw, dw)
         self.decoder.bias.data.fill_(0)
         self.decoder.weight.data.uniform_(-dw, dw)
