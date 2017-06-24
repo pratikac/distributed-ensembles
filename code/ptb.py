@@ -31,7 +31,7 @@ opt = add_args([
 ['--lr', 1.0, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
 ['--mom', 0.5, 'mom'],
-['--clip', 1, 'gradient clipping'],
+['--clip', 1.0, 'gradient clipping'],
 ['-n', 1, 'replicas'],
 ['-L', 5, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
@@ -92,7 +92,7 @@ def train(e):
     ids = deepcopy(model.ids)
 
     h = [model.w[i].init_hidden(opt['b']) for i in xrange(n)]
-    bids = [0 for i in xrange(n)]
+    bids = [int(random.random()*maxb) for i in xrange(n)]
     total_loss = 0
 
     for bi in xrange(maxb):
@@ -142,7 +142,7 @@ def train(e):
         perp.update(np.mean(np.exp(fs)))
         perpstd.update(np.std(np.exp(fs)))
 
-        dt.update(timer()-_dt, 1)
+        dt.update(timer()-_dt)
 
         if opt['l']:
             s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), perp=np.mean(np.exp(fs)),
@@ -152,6 +152,8 @@ def train(e):
         if bi % 200 == 0 and bi != 0:
             print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f'))%(dt.avg,
                 e,bi,maxb, f.avg, fstd.avg, perp.avg, perpstd.avg))
+            # f.reset(); fstd.reset()
+            # perp.reset(); perpstd.reset()
 
     if opt['l']:
         s = dict(e=e, i=0, f=f.avg, fstd=fstd.avg, perp=perp.avg, perpstd=perpstd.avg,
@@ -242,7 +244,7 @@ if not opt['r'] == '':
             t=d['t']))
 
     print('[Loaded model, check validation error]')
-    val(opt['e'])
+    val(d['e'], 'val')
 
 try:
     for e in xrange(opt['e'], opt['B']):
