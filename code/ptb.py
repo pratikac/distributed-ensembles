@@ -24,15 +24,16 @@ opt = add_args([
 ['--gpus', '', 'groups of gpus'],
 ['-b', 20, 'batch_size'],
 ['-e', 0, 'start epoch'],
-['--optim', 'SGD', 'optim: DistESGD | SGD | HJ | ElasticSGD | EntropySGD'],
+['--optim', 'DistESGD', 'optim: DistESGD | SGD | HJ | ElasticSGD | EntropySGD'],
 ['--l2', -1., 'ell-2'],
 ['-B', 40, 'Max epochs'],
 ['-T', 35, 'bptt'],
 ['--lr', 20.0, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
+['--mom', 0.0, 'mom'],
 ['--clip', 0.25, 'gradient clipping'],
 ['-n', 1, 'replicas'],
-['-L', 25, 'sgld iterations'],
+['-L', 5, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
 ['--g1', 1.0, 'elastic gamma'],
 ['--gdot', 0.5, 'gamma dot'],
@@ -62,14 +63,14 @@ opt['vocab'] = len(corpus.dictionary)
 model = models.ReplicateModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
 
-build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
+build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'vocab',
                             'f','v', 'augment', 't',
                             'save','e','l2','r', 'lr'])
 logger = create_logger(opt)
 pprint(opt)
 
 optimizer = getattr(optim, opt['optim'])(model, config =
-        dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=0.0,
+        dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=opt['mom'],
             L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'],
             num_batches=(ptb[0]['train'].size(0) -1) // opt['T'],
@@ -193,7 +194,8 @@ def val(e, src):
 
     f = f/len(ptb[0][src])
     if opt['l']:
-        s = dict(e=e, i=0, f=f, perp=math.exp(f), val=True)
+        s = dict(e=e, i=0, f=f, perp=math.exp(f))
+        s[src] = True
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
@@ -232,7 +234,7 @@ if not opt['r'] == '':
 
     print('[Loading new optimizer]')
     optimizer = getattr(optim, opt['optim'])(model, config =
-        dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=0.0,
+        dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=opt['mom'],
             L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'],
             num_batches=(ptb[0]['train'].size(0) -1) // opt['T'],
@@ -242,9 +244,12 @@ if not opt['r'] == '':
     print('[Loaded model, check validation error]')
     val(opt['e'])
 
-#val(0, 'valid')
-for e in xrange(opt['e'], opt['B']):
-    train(e)
-    val(e, 'valid')
-    save_ensemble(e)
+try:
+    for e in xrange(opt['e'], opt['B']):
+        train(e)
+        val(e, 'val')
+        save_ensemble(e)
+except KeyboardInterrupt:
+    print('Running on test set before exiting...')
+
 val(opt['B']-1, 'test')
