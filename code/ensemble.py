@@ -34,7 +34,7 @@ opt = add_args([
 ['-n', 1, 'replicas'],
 ['-L', 25, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
-['--g1', 1.0, 'elastic gamma'],
+['--g1', 1, 'elastic gamma'],
 ['--gdot', 0.5, 'gamma dot'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
@@ -51,8 +51,7 @@ ngpus = th.cuda.device_count()
 gpus = [i if opt['g'] >= ngpus else opt['g'] for i in xrange(ngpus)]
 if not opt['gpus'] == '':
     gpus = json.loads(opt['gpus'])
-setup(  t=4, s=opt['s'],
-        gpus=gpus)
+setup(t=4, s=opt['s'], gpus=gpus)
 if opt['dataset'] == 'imagenet':
     opt['b'] = 32
 
@@ -77,7 +76,7 @@ else:
 
 optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'], llr=lrschedule(opt, opt['e']),
-            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'], num_batches=len(loaders[0]['train']),
+            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/len(loaders[0]['train']),
             verbose=opt['v'],
             t=0))
 
@@ -243,7 +242,7 @@ if not opt['r'] == '':
     print('[Loading new optimizer]')
     optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'], llr=lrschedule(opt, opt['e']),
-            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'], num_batches=len(loaders[0]['train']),
+            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/len(loaders[0]['train']),
             verbose=opt['v'],
             t=d['t']))
 

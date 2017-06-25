@@ -30,7 +30,7 @@ class DistESGD(object):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0, llr=0.1,
                 weight_decay=0, nesterov=True, L=25, beta1=0.75,
-                g0=0.01, g1=1, gdot=0.5, eps=0, num_batches=500,
+                g0=0.01, g1=1, gdot=0.5, eps=0,
                 verbose=False,
                 t=0)
 
@@ -66,7 +66,7 @@ class DistESGD(object):
         L = c['L']
         g0 = c['g0']
         g1 = c['g1']
-        gdot = c['gdot']/c['num_batches']
+        gdot = c['gdot']
         llr = c['llr']
         beta1 = c['beta1']
         eps = c['eps']
@@ -138,7 +138,10 @@ class DistESGD(object):
                 w[i].add_(-llr, dw[i])
                 mw[i].mul_(beta1).add_(1-beta1, w[i])
 
+        # update reference with mw
+        r.copy_(comm.reduce_add(mw, rid)).mul_(1/float(n))
         rc = comm.broadcast(r, ids)
+
         gesgd = min(g1*(1+gdot)**state['t'], 10)
         for i in xrange(n):
             if L > 0:
@@ -159,8 +162,7 @@ class DistESGD(object):
             w[i].add_(-lr, dw[i])
 
         # update reference
-        dr.zero_()
-        dr.copy_(comm.reduce_add(w, 0)).mul_(-1)
+        dr.copy_(comm.reduce_add(w, rid)).mul_(-1)
         dr.add_(n, r)
         if mom > 0:
             mdr.mul_(mom).add_(1-damp, dr)
