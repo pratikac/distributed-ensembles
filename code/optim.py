@@ -76,7 +76,7 @@ class DistESGD(object):
 
             state['w'] = [t.clone().cuda(ids[i]) for i in xrange(n)]
             state['dw'] = [t.clone().cuda(ids[i]) for i in xrange(n)]
-            state['r'], state['dr'] = t.clone().cuda(rid), t.clone().cuda(rid)
+            state['r'], state['dr'], state['mdr'] = t.clone().cuda(rid), t.clone().cuda(rid), t.clone().cuda(rid)
 
             for i in xrange(n):
                 flatten_params(model.w[i], state['w'][i], state['dw'][i])
@@ -88,6 +88,7 @@ class DistESGD(object):
             for i in xrange(n):
                 state['mdw'][i].zero_()
                 state['cmdw'][i].zero_()
+            state['mdr'].zero_()
 
         state['t'] += 1
 
@@ -97,7 +98,7 @@ class DistESGD(object):
         eta = state['eta']
 
         wc, dwc = state['wc'], state['dwc']
-        r = state['r']
+        r, dr, mdr = state['r'], state['dr'], state['mdr']
 
         def feval():
             for i in xrange(n):
@@ -137,10 +138,7 @@ class DistESGD(object):
                 w[i].add_(-llr, dw[i])
                 mw[i].mul_(beta1).add_(1-beta1, w[i])
 
-        r.zero_()
-        r.copy_(comm.reduce_add(mw, 0)).mul_(1/float(n))
         rc = comm.broadcast(r, ids)
-
         gesgd = min(g1*(1+gdot)**state['t'], 10)
         for i in xrange(n):
             if L > 0:
@@ -160,8 +158,17 @@ class DistESGD(object):
             w[i].copy_(wc[i])
             w[i].add_(-lr, dw[i])
 
-        r.zero_()
-        r.copy_(comm.reduce_add(w, 0)).mul_(1/float(n))
+        # update reference
+        dr.zero_()
+        dr.copy_(comm.reduce_add(w, 0)).mul_(-1)
+        dr.add_(n, r)
+        if mom > 0:
+            mdr.mul_(mom).add_(1-damp, dr)
+            if nesterov:
+                dr.add_(mom, mdr)
+            else:
+                dr.copy_(mdr)
+        r.add_(-lr, dr)
 
         e = 1e-12
         if verbose and state['t'] % 25 == 0:
