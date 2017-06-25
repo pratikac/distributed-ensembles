@@ -161,7 +161,6 @@ class DistESGD(object):
             w[i].copy_(wc[i])
             w[i].add_(-lr, dw[i])
 
-        # update reference
         dr.copy_(comm.reduce_add(w, rid)).mul_(-1)
         dr.add_(n, r)
         if mom > 0:
