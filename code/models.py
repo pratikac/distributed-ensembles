@@ -59,7 +59,7 @@ class mnistfc(nn.Module):
 
 class lenet(nn.Module):
     name = 'lenet'
-    def __init__(self, opt):
+    def __init__(self, opt, c1=20, c2=50, c3=500):
         super(lenet, self).__init__()
 
         if opt['d'] < 0:
@@ -75,13 +75,13 @@ class lenet(nn.Module):
                 nn.Dropout(p))
 
         self.m = nn.Sequential(
-            convbn(1,20,5,3,opt['d']),
-            convbn(20,50,5,2,opt['d']),
-            View(50*2*2),
-            nn.Linear(50*2*2, 500),
+            convbn(1,c1,5,3,opt['d']),
+            convbn(c1,c2,5,2,opt['d']),
+            View(c2*2*2),
+            nn.Linear(c2*2*2, c3),
             nn.ReLU(True),
             nn.Dropout(opt['d']),
-            nn.Linear(500,10))
+            nn.Linear(c3,10))
 
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
         print(s)
@@ -89,6 +89,11 @@ class lenet(nn.Module):
 
     def forward(self, x):
         return self.m(x)
+
+class lenetl(lenet):
+    name = 'lenetl'
+    def __init__(self, opt, c1=40, c2=100, c3=1000):
+        super(lenetl, self).__init__(opt, c1, c2, c3)
 
 class allcnn(nn.Module):
     name = 'allcnn'

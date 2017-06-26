@@ -118,11 +118,17 @@ class DistESGD(object):
             dwc[i].copy_(dw[i])
             mw[i].copy_(w[i])
 
+        rc = comm.broadcast(r, ids)
         gsgld = min(g0*(1+gdot)**state['t'], 1)
+        gesgd = min(g1*(1+gdot)**state['t'], 1)
+
         for l in xrange(L):
             fs, errs, errs5 = feval()
             for i in xrange(n):
+
                 dw[i].add_(gsgld, w[i]-wc[i])
+
+                dw[i].add_(gesgd, w[i]-rc[i])
 
                 if eps > 0:
                     eta[i].normal_()
@@ -142,7 +148,6 @@ class DistESGD(object):
         r.copy_(comm.reduce_add(mw, rid)).mul_(1/float(n))
         rc = comm.broadcast(r, ids)
 
-        gesgd = min(g1*(1+gdot)**state['t'], 10)
         for i in xrange(n):
             if L > 0:
                 dw[i].copy_(wc[i]-mw[i])
