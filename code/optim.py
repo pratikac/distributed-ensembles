@@ -88,7 +88,6 @@ class DistESGD(object):
             for i in xrange(n):
                 state['mdw'][i].zero_()
                 state['cmdw'][i].zero_()
-            state['mdr'].zero_()
 
         state['t'] += 1
 
@@ -98,7 +97,7 @@ class DistESGD(object):
         eta = state['eta']
 
         wc, dwc = state['wc'], state['dwc']
-        r, dr, mdr = state['r'], state['dr'], state['mdr']
+        r, dr = state['r'], state['dr']
 
         def feval():
             for i in xrange(n):
