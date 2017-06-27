@@ -76,7 +76,8 @@ class DistESGD(object):
 
             state['w'] = [t.clone().cuda(ids[i]) for i in xrange(n)]
             state['dw'] = [t.clone().cuda(ids[i]) for i in xrange(n)]
-            state['r'], state['dr'], state['mdr'] = t.clone().cuda(rid), t.clone().cuda(rid), t.clone().cuda(rid)
+            state['r'], state['dr'], state['mdr'], state['cr'] = t.clone().cuda(rid), \
+                    t.clone().cuda(rid), t.clone().cuda(rid), t.clone().cuda(rid)
 
             for i in xrange(n):
                 flatten_params(model.w[i], state['w'][i], state['dw'][i])
@@ -142,6 +143,7 @@ class DistESGD(object):
                 mw[i].mul_(beta1).add_(1-beta1, w[i])
 
         # update reference with mw
+        state['cr'].copy_(r)
         r.copy_(comm.reduce_add(mw, rid)).mul_(1/float(n))
         rc = comm.broadcast(r, ids)
 
@@ -163,16 +165,20 @@ class DistESGD(object):
             w[i].copy_(wc[i])
             w[i].add_(-lr, dw[i])
 
-        dr.zero_()
-        dr.copy_(comm.reduce_add(w, rid)).mul_(-1/float(n))
-        dr.add_(1, r)
-        if mom > 0:
-            mdr.mul_(mom).add_(1-damp, dr)
-            if nesterov:
-                dr.add_(mom, mdr)
-            else:
-                dr.copy_(mdr)
-        r.add_(-lr, dr)
+        if False:
+            dr.zero_()
+            dr.copy_(comm.reduce_add(w, rid)).mul_(-1/float(n))
+            dr.add_(1, state['cr'])
+            if mom > 0:
+                mdr.mul_(mom).add_(1-damp, dr)
+                if nesterov:
+                    dr.add_(mom, mdr)
+                else:
+                    dr.copy_(mdr)
+            r.copy_(state['cr'])
+            r.add_(-lr, dr)
+        else:
+            r.copy_(comm.reduce_add(w, rid)).mul_(1/float(n))
 
         e = 1e-12
         if verbose and state['t'] % 25 == 0:
