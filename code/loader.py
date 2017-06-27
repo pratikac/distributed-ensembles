@@ -11,19 +11,14 @@ import scipy.io as sio
 
 class sampler_t:
     def __init__(self, batch_size, x,y, train=True, augment=False,
-            frac=1.0, frac_start=0, weights=None):
+            frac=1.0, frac_start=0, balanced_sampling=False):
         self.n = x.size(0)
         idx = th.randperm(self.n)
         self.x = th.index_select(x, 0, idx)
         self.y = th.index_select(y, 0, idx)
 
         self.x, self.y = self.x.pin_memory(), self.y.pin_memory()
-        self.num_classes = np.unique(self.y.numpy()).max() + 1
-
-        if weights is None:
-            self.weights = th.Tensor(self.n).fill_(1).double()
-        else:
-            self.weights = weights.clone().double()
+        self.balanced_sampling = balanced_sampling
 
         if train and frac < 1-1e-12:
             self.frac_start = frac_start
@@ -39,8 +34,10 @@ class sampler_t:
 
             self.n = int(self.n*frac)
 
-            t1 = np.array(np.bincount(self.y.numpy(), minlength=self.num_classes))
-            self.weights = th.from_numpy(float(self.n)/t1[self.y.numpy()]).double()
+            if self.balanced_sampling:
+                self.num_classes = np.unique(self.y.numpy()).max() + 1
+                t1 = np.array(np.bincount(self.y.numpy(), minlength=self.num_classes))
+                self.weights = th.from_numpy(float(self.n)/t1[self.y.numpy()]).double()
 
         self.b = batch_size
         self.idx = th.arange(0, self.b).long()
@@ -50,7 +47,10 @@ class sampler_t:
 
     def __next__(self):
         if self.train:
-            self.idx.copy_(th.multinomial(self.weights, self.b, True))
+            if self.balanced_sampling:
+                self.idx.copy_(th.multinomial(self.weights, self.b, True))
+            else:
+                self.idx.random_(0,self.n)
 
             x,y  = th.index_select(self.x, 0, self.idx), \
                     th.index_select(self.y, 0, self.idx)
