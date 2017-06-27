@@ -120,15 +120,13 @@ class DistESGD(object):
 
         rc = comm.broadcast(r, ids)
         gsgld = min(g0*(1+gdot)**state['t'], 1)
-        gesgd = min(g1*(1+gdot)**state['t'], 1)
+        gesgd = min(g1*(1+gdot)**state['t'], 10)
 
         for l in xrange(L):
             fs, errs, errs5 = feval()
             for i in xrange(n):
 
                 dw[i].add_(gsgld, w[i]-wc[i])
-
-                dw[i].add_(gesgd, w[i]-rc[i])
 
                 if eps > 0:
                     eta[i].normal_()
