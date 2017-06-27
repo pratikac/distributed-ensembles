@@ -1,5 +1,6 @@
 import os, sys, subprocess, json, argparse
 from itertools import product
+import torch as th
 
 parser = argparse.ArgumentParser(description='Quick dirty hyperoptim')
 parser.add_argument('-c','--command',   help='Main command', type=str, required=True)
