@@ -188,6 +188,7 @@ def val(e):
     if not opt['m'][:6] == 'resnet':
         dry_feed(model.ref, loaders[0]['train_full'], id=rid)
     model.eval()
+
     val_loader = loaders[0]['val']
     maxb = len(val_loader)
     f, top1, top5 = AverageMeter(), AverageMeter(), AverageMeter()
@@ -206,7 +207,7 @@ def val(e):
         top1.update(err, bsz)
         top5.update(err5, bsz)
 
-        if bi % 100 == 0 and bi != 0:
+        if bi % 100 == 0 and bi > 0:
             print((color('red', '*[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, bi, f.avg, top1.avg, top5.avg))
 
     if opt['l']:
