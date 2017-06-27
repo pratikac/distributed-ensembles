@@ -71,6 +71,7 @@ if opt['frac'] > 1-1e-12:
         loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
 else:
     for i in xrange(opt['n']):
+        opt['frac_start'] = (i/float(opt['n'])) % 1
         tr,v,te,trf = getattr(loader, opt['dataset'])(opt)
         loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
 

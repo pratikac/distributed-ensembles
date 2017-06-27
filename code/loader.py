@@ -11,9 +11,13 @@ import scipy.io as sio
 
 class sampler_t:
     def __init__(self, batch_size, x,y, train=True, augment=False,
-            frac=1.0, weights=None):
+            frac=1.0, frac_start=0, weights=None):
         self.n = x.size(0)
-        self.x, self.y = x.pin_memory(), y.pin_memory()
+        idx = th.randperm(self.n)
+        self.x = th.index_select(x, 0, idx)
+        self.y = th.index_select(y, 0, idx)
+
+        self.x, self.y = self.x.pin_memory(), self.y.pin_memory()
         self.num_classes = np.unique(self.y.numpy()).max() + 1
 
         if weights is None:
@@ -22,11 +26,18 @@ class sampler_t:
             self.weights = weights.clone().double()
 
         if train and frac < 1-1e-12:
-            idx = th.randperm(self.n)
-            self.x = th.index_select(self.x, 0, idx)
-            self.y = th.index_select(self.y, 0, idx)
+            self.frac_start = frac_start
+            self.frac = frac
+            ns, ne = int(self.n*self.frac_start), int(self.n*(self.frac_start + self.frac))
+
+            if ne <= self.n:
+                self.x, self.y = self.x[ns:ne], self.y[ns:ne]
+            else:
+                ne = ne % self.n
+                self.x, self.y =    th.cat((self.x[ns:], self.x[:ne])), \
+                                    th.cat((self.y[ns:], self.y[:ne]))
+
             self.n = int(self.n*frac)
-            self.x, self.y = self.x[:self.n], self.y[:self.n]
 
             t1 = np.array(np.bincount(self.y.numpy(), minlength=self.num_classes))
             self.weights = th.from_numpy(float(self.n)/t1[self.y.numpy()]).double()
@@ -77,11 +88,13 @@ class sampler_t:
 
 def mnist(opt):
     frac = opt.get('frac', 1.0)
+    frac_start = opt.get('frac_start', 0.0)
+
     d1, d2 = datasets.MNIST('/local2/pratikac/mnist', train=True), \
             datasets.MNIST('/local2/pratikac/mnist', train=False)
 
     train = sampler_t(opt['b'], d1.train_data.view(-1,1,28,28).float(),
-        d1.train_labels, augment=opt['augment'], frac=frac)
+        d1.train_labels, augment=opt['augment'], frac=frac, frac_start=frac_start)
     train_full = sampler_t(opt['b'], d1.train_data.view(-1,1,28,28).float(),
         d1.train_labels, augment=opt['augment'], frac=1.0, train=False)
     val = sampler_t(opt['b'], d2.test_data.view(-1,1,28,28).float(),
@@ -90,7 +103,9 @@ def mnist(opt):
 
 def cifar10(opt):
     frac = opt.get('frac', 1.0)
+    frac_start = opt.get('frac_start', 0.0)
     loc = '/local2/pratikac/cifar/'
+
     if 'resnet' in opt['m']:
         d1 = np.load(loc+'cifar10-train.npz')
         d2 = np.load(loc+'cifar10-test.npz')
@@ -99,7 +114,7 @@ def cifar10(opt):
         d2 = np.load(loc+'cifar10-test-proc.npz')
 
     train = sampler_t(opt['b'], th.from_numpy(d1['data']),
-                     th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac)
+                     th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac, frac_start=frac_start)
     train_full = sampler_t(opt['b'], th.from_numpy(d1['data']),
                  th.from_numpy(d1['labels']), frac=1.0, train=False)
     val = sampler_t(opt['b'], th.from_numpy(d2['data']),
@@ -108,7 +123,9 @@ def cifar10(opt):
 
 def cifar100(opt):
     frac = opt.get('frac', 1.0)
+    frac_start = opt.get('frac_start', 0.0)
     loc = '/local2/pratikac/cifar/'
+
     if 'resnet' in opt['m']:
         d1 = np.load(loc+'cifar100-train.npz')
         d2 = np.load(loc+'cifar100-test.npz')
@@ -117,7 +134,7 @@ def cifar100(opt):
         d2 = np.load(loc+'cifar100-test-proc.npz')
 
     train = sampler_t(opt['b'], th.from_numpy(d1['data']),
-                     th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac)
+                     th.from_numpy(d1['labels']), augment=opt['augment'], frac=frac, frac_start=frac_start)
     train_full = sampler_t(opt['b'], th.from_numpy(d1['data']),
                      th.from_numpy(d1['labels']), frac=1.0, train=False)
     val = sampler_t(opt['b'], th.from_numpy(d2['data']),
@@ -126,7 +143,9 @@ def cifar100(opt):
 
 def svhn(opt):
     frac = opt.get('frac', 1.0)
+    frac_start = opt.get('frac_start', 0.0)
     loc = '/local2/pratikac/svhn'
+
     d1 = sio.loadmat(os.path.join(loc, 'train_32x32.mat'))
     d2 = sio.loadmat(os.path.join(loc, 'extra_32x32.mat'))
     d3 = sio.loadmat(os.path.join(loc, 'test_32x32.mat'))
@@ -147,7 +166,8 @@ def svhn(opt):
     dv['data'] = (dv['data'] - mean)/std
 
     train = sampler_t(opt['b'], th.from_numpy(dt['data']).float(),
-                    th.from_numpy(dt['labels']).long().squeeze(), augment=opt['augment'], frac=frac)
+                    th.from_numpy(dt['labels']).long().squeeze(), augment=opt['augment'],
+                    frac=frac, frac_start=frac_start)
     train_full = sampler_t(opt['b'], th.from_numpy(dt['data']).float(),
                     th.from_numpy(dt['labels']).long().squeeze(), frac=1.0, train=False)
     val = sampler_t(opt['b'], th.from_numpy(dv['data']).float(),
