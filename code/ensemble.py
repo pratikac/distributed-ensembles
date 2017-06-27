@@ -135,9 +135,9 @@ def train(e):
             logger.info('[LOG] ' + json.dumps(s))
 
         bif = int(5/dt.avg)+1
-        if bi % bif == 0 and bi != 0:
+        if bi % bif == 0 and bi > 0:
             print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f%% %2.2f+-%2.2f%%'))%(dt.avg,
-                e,bi,maxb, f.avg, fstd.avg, top1.avg, top1std.avg, top5.avg, top5std.avg))
+                e,bi,maxb, np.mean(fs), np.std(fs), np.mean(errs), np.std(errs), np.mean(errs5), np.std(errs5)))
 
     if opt['l']:
         s = dict(e=e, i=0, f=f.avg, fstd=fstd.avg, top1=top1.avg, top1std=top1std.avg,
