@@ -87,6 +87,7 @@ def train(e):
 
     f, top1, top5, dt = AverageMeter(), AverageMeter(), AverageMeter(), AverageMeter()
     fstd, top1std, top5std = AverageMeter(), AverageMeter(), AverageMeter()
+    pf, ptop1, ptop5 = [],[],[]
 
     bsz = opt['b']
     maxb = len(loaders[0]['train'])
@@ -130,6 +131,10 @@ def train(e):
         top5std.update(np.std(errs5), bsz)
         dt.update(timer()-_dt, 1)
 
+        pf.append(fs)
+        ptop1.append(errs)
+        ptop5.append(errs5)
+
         if opt['l']:
             s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), top1=np.mean(errs), top5=np.mean(errs5),
                     fstd=np.std(fs), top1std=np.std(errs), top5std = np.std(errs5), dt=dt.avg)
@@ -138,7 +143,9 @@ def train(e):
         bif = int(5/dt.avg)+1
         if bi % bif == 0 and bi > 0:
             print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f%% %2.2f+-%2.2f%%'))%(dt.avg,
-                e,bi,maxb, np.mean(fs), np.std(fs), np.mean(errs), np.std(errs), np.mean(errs5), np.std(errs5)))
+                e,bi,maxb, np.mean(pf), np.mean(np.std(pf, 1)), np.mean(ptop1), np.mean(np.std(ptop1,1)),
+                np.mean(ptop5), np.mean(np.std(ptop5,1)) ))
+            pf, ptop1, ptop5 = [],[],[]
 
     if opt['l']:
         s = dict(e=e, i=0, f=f.avg, fstd=fstd.avg, top1=top1.avg, top1std=top1std.avg,
