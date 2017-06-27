@@ -175,7 +175,7 @@ def val(e):
                 f.update(_f, bsz)
                 top1.update(err, bsz)
                 top5.update(err5, bsz)
-            print((color('red', '++[%d][%2d] %2.4f %2.4f%% %2.4f%%\n'))%(e, i, f.avg, top1.avg, top5.avg))
+            print((color('red', '++[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, i, f.avg, top1.avg, top5.avg))
 
     rid = model.refid
     if not opt['m'][:6] == 'resnet':
