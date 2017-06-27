@@ -118,7 +118,6 @@ class DistESGD(object):
             dwc[i].copy_(dw[i])
             mw[i].copy_(w[i])
 
-        rc = comm.broadcast(r, ids)
         gsgld = min(g0*(1+gdot)**state['t'], 1)
         gesgd = min(g1*(1+gdot)**state['t'], 10)
 
@@ -164,8 +163,9 @@ class DistESGD(object):
             w[i].copy_(wc[i])
             w[i].add_(-lr, dw[i])
 
-        dr.copy_(comm.reduce_add(w, rid)).mul_(-1)
-        dr.add_(n, r)
+        dr.zero_()
+        dr.copy_(comm.reduce_add(w, rid)).mul_(-1/float(n))
+        dr.add_(1, r)
         if mom > 0:
             mdr.mul_(mom).add_(1-damp, dr)
             if nesterov:
