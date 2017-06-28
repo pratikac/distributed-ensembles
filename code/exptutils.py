@@ -150,8 +150,11 @@ def setup(t=4, s=42, gpus=[0,1,2]):
     th.set_num_threads(t)
     np.random.seed(s)
     th.manual_seed(s)
+
     if len(np.unique(gpus)) == 1:
         th.cuda.set_device(gpus[0])
+        # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+        # os.environ["CUDA_VISIBLE_DEVICES"]=str(gpus[0])
         th.cuda.manual_seed(s)
     else:
         th.cuda.manual_seed_all(s)
