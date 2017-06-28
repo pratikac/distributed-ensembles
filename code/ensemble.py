@@ -162,7 +162,7 @@ def val(e):
     n = opt['n']
     ids = deepcopy(model.ids)
 
-    if opt['frac'] < 1:
+    if opt['frac'] < 1 and False:
         model.train()
         print((color('red', 'Full train:')))
         for i in xrange(n):
