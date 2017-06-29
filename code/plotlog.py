@@ -35,6 +35,8 @@ if opt['s']:
 
 if not opt['r']:
     fsz = 18
+    if opt['s']:
+        fsz = 24
     plt.rc('font', size=fsz)
     plt.rc('axes', titlesize=fsz)
     plt.rc('axes', labelsize=fsz)
@@ -62,7 +64,7 @@ whitelist = ['n', 'L', 'e',
 colors = {  'SGD':'k', 'SGD (full)':'k',
             'Entropy-SGD':'r',
             'Elastic-SGD (n=3)':'b', 'Elastic-SGD (n=6)':'b', 'Elastic-SGD (n=8)':'b',
-            'Parle (n=3)':'g', 'Parle (n=6)':'g', 'Parle (n=8)':'g'}
+            'Parle (n=3)':'g', 'Parle (n=6)':'g', 'Parle (n=8)':'m'}
 
 df = loaddir(os.path.join(opt['l'], opt['m']), force=opt['f'])
 df = df[(df['summary'] == True)]
@@ -85,6 +87,10 @@ for ni in np.unique(df.n):
     if ni != 1:
         df.loc[(df['L'] != 1) & (df['n'] == ni), 'optim'] = 'Parle (n=%d)'%(ni)
         df.loc[(df['L'] == 1) & (df['n'] == ni), 'optim'] = 'Elastic-SGD (n=%d)'%(ni)
+
+if opt['m'] != 'lenet':
+    eff = 0.6
+    df.loc[(df['optim'] == 'SGD') | (df['optim'] == 'Entropy-SGD'), 'ee'] *= eff
 
 sgd = df[(df['optim']=='SGD') & (df['frac'] == 1.0)].copy()
 sgd.replace({'SGD':'SGD (full)'}, inplace=True)
@@ -131,16 +137,16 @@ def lenet():
     plt.title('LeNet: MNIST')
     plt.xlim([0, 100])
     plt.ylim([0.4, 1.0])
-    plt.xlabel('epochs x L')
+    plt.xlabel('Effective epochs')
     set_ticks(yt=[0.4, 0.6, 0.8, 1.0])
 
     plt.text(65, 0.415, r'$0.44 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['Parle (n=6)'])
     plt.text(85, 0.415, r'$0.48 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['Elastic-SGD (n=6)'])
-    plt.text(85, 0.55, r'$0.49 \%$', fontsize=fsz,
+    plt.text(85, 0.57, r'$0.49 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['Entropy-SGD'])
-    plt.text(70, 0.55, r'$0.50 \%$', fontsize=fsz,
+    plt.text(70, 0.57, r'$0.50 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['SGD'])
     if opt['s']:
         plt.savefig('../fig/lenet_full_valid.pdf', bbox_inches='tight')
@@ -149,16 +155,16 @@ def allcnn_cifar10():
     f = rough(df[df['frac'] == 1], 1)
     plt.figure(f.number)
     plt.title('All-CNN: CIFAR-10 (full)')
-    plt.xlabel('epochs x L')
-    plt.xlim([0, 300])
-    plt.ylim([5, 15])
-    set_ticks(xt=[0, 50, 100, 150, 200, 250, 300], yt=[5,8,11,14])
+    plt.xlabel('Effective epochs')
+    plt.xlim([0, 250])
+    plt.ylim([5, 14])
+    set_ticks(xt=[0, 50, 100, 150, 200, 250], yt=[5,8,11,14])
 
-    plt.text(265, 5.8, r'$5.18 \%$', fontsize=fsz,
+    plt.text(225, 5.8, r'$5.18 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['Parle (n=3)'])
-    plt.text(225, 6.45, r'$5.76 \%$', fontsize=fsz,
+    plt.text(150, 5.18, r'$5.76 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['Entropy-SGD'])
-    plt.text(175, 6.8, r'$6.15 \%$', fontsize=fsz,
+    plt.text(100, 7, r'$6.15 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['SGD'])
 
     if opt['s']:
@@ -171,16 +177,16 @@ def allcnn_cifar10():
     f = rough(pd.concat([df2, sgd]), 2)
     plt.figure(f.number)
     plt.title('All-CNN: CIFAR-10 (frac = 0.5)')
-    plt.xlabel('epochs x L x frac')
-    plt.xlim([0, 200])
+    plt.xlabel('Effective epochs')
+    plt.xlim([0, 150])
     plt.ylim([5, 15])
-    set_ticks(xt=[0, 50, 100, 150, 200], yt=[5,10,15])
+    set_ticks(xt=[0, 50, 100, 150], yt=[5,10,15])
 
     plt.text(92, 5.44, r'$5.89 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['Parle (n=3)'])
-    plt.text(92, 7.0, r'$6.51 \%$', fontsize=fsz,
+    plt.text(80, 8.0, r'$6.51 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['Elastic-SGD (n=3)'])
-    plt.text(175, 6.8, r'$6.14 \%$', fontsize=fsz,
+    plt.text(110, 6.8, r'$6.15 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['SGD (full)'])
 
     if opt['s']:
@@ -193,69 +199,72 @@ def allcnn_cifar10():
     f = rough(pd.concat([df2, sgd]), 3)
     plt.figure(f.number)
     plt.title('All-CNN: CIFAR-10 (frac = 0.25)')
-    plt.xlabel('epochs x L x frac')
-    plt.xlim([0, 200])
+    plt.xlabel('Effective epochs')
+    plt.xlim([0, 100])
     plt.ylim([6, 18])
-    set_ticks(xt=[0, 50, 100, 150, 200], yt=[6,9,12,15,18])
+    set_ticks(xt=[0, 25, 50, 75, 100], yt=[6,9,12,15,18])
 
-    plt.text(65, 6.5, r'$6.08 \%$', fontsize=fsz,
+    plt.text(55, 6.5, r'$6.08 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['Parle (n=6)'])
-    plt.text(45, 7.4, r'$6.8 \%$', fontsize=fsz,
+    plt.text(40, 7.4, r'$6.8 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['Elastic-SGD (n=6)'])
-    plt.text(175, 6.8, r'$6.14 \%$', fontsize=fsz,
+    plt.text(85, 8, r'$6.15 \%$', fontsize=fsz,
         verticalalignment='center', color=colors['SGD (full)'])
 
     if opt['s']:
         plt.savefig('../fig/allcnn_cifar10_fourth_valid.pdf', bbox_inches='tight')
 
-# def wrn_cifar100():
-#     f = rough(df[df['frac'] == 1], 1)
-#     plt.figure(f.number)
-#     plt.title('Wide-ResNet: CIFAR-100')
-#     plt.xlabel('epochs x L')
-#     plt.xlim([0, 200])
-#     plt.ylim([15, 45])
-#     set_ticks(xt=[0, 50, 100, 150, 200], yt=[15,25,35,45])
+def wrn_cifar10():
+    f = rough(df[df['frac'] == 1], 1)
+    plt.figure(f.number)
+    plt.title('WRN-28-10: CIFAR-10')
+    plt.xlabel('Effective epochs')
+    plt.xlim([0, 150])
+    plt.ylim([3,15])
+    set_ticks(xt=[0, 50, 100, 150], yt=[3,6,9,12,15])
 
-#     plt.text(90, 16.5, r'$17.44$%', fontsize=fsz,
-#         verticalalignment='center', color=colors['Parle (n=3)'])
-#     plt.text(175, 18, r'$19.01$%', fontsize=fsz,
-#         verticalalignment='center', color=colors['Entropy-SGD'])
-#     plt.text(130, 18, r'$19.5$%', fontsize=fsz,
-#         verticalalignment='center', color=colors['SGD'])
+    plt.text(25, 3.6, r'$3.77\%$', fontsize=fsz,
+        verticalalignment='center', color=colors['Parle (n=8)'])
+    plt.text(130, 3.6, r'$3.76\%$', fontsize=fsz,
+        verticalalignment='center', color=colors['Parle (n=3)'])
+    plt.text(75, 6.10, r'$4.38\%$', fontsize=fsz,
+        verticalalignment='center', color=colors['Elastic-SGD (n=3)'])
+    plt.text(130, 4.9, r'$4.23\%$', fontsize=fsz,
+        verticalalignment='center', color=colors['Entropy-SGD'])
+    plt.text(100, 4.9, r'$4.29\%$', fontsize=fsz,
+        verticalalignment='center', color=colors['SGD'])
 
-#     if opt['s']:
-#         plt.savefig('../fig/wrn_cifar100_full_valid.pdf', bbox_inches='tight')
+    if opt['s']:
+        plt.savefig('../fig/wrn_cifar10_full_valid.pdf', bbox_inches='tight')
 
-#     sgd['frac'].replace(1.0, 0.5, inplace=True)
-#     f = rough(pd.concat([df[df['frac'] == 0.5], sgd]), 2)
-#     plt.figure(f.number)
-#     plt.title('Wide-ResNet: CIFAR-100 (frac = 0.5)')
-#     plt.xlabel('epochs x L x frac')
-#     plt.xlim([0, 200])
-#     # plt.ylim([6, 15])
-#     # set_ticks(xt=[0, 50, 100, 150, 200], yt=[6,9,12,15])
-#     if opt['s']:
-#         plt.savefig('../fig/wrn_cifar100_half_valid.pdf', bbox_inches='tight')
+def wrn_cifar100():
+    f = rough(df[df['frac'] == 1], 1)
+    plt.figure(f.number)
+    plt.title('WRN-28-10: CIFAR-100')
+    plt.xlabel('Effective epochs')
+    plt.xlim([0, 150])
+    plt.ylim([15, 45])
+    set_ticks(xt=[0, 50, 100, 150], yt=[15,25,35,45])
 
-#     sgd['frac'].replace(0.5, 0.25, inplace=True)
-#     f = rough(pd.concat([df[df['frac'] == 0.25], sgd]), 3)
-#     plt.figure(f.number)
-#     plt.title('Wide-ResNet: CIFAR-100 (frac = 0.25)')
-#     plt.xlabel('epochs x L x frac')
-#     plt.xlim([0, 200])
-#     # plt.ylim([6, 18])
-#     # set_ticks(xt=[0, 50, 100, 150, 200], yt=[6,10,14,18])
-#     if opt['s']:
-#         plt.savefig('../fig/wrn_cifar100_fourth_valid.pdf', bbox_inches='tight')
+    plt.text(75, 16.1, r'$17.64\%$', fontsize=fsz,
+        verticalalignment='center', color=colors['Parle (n=3)'])
+    plt.text(73, 22, r'$18.96\%$', fontsize=fsz,
+        verticalalignment='center', color=colors['Parle (n=8)'])
+    plt.text(125, 20.3, r'$19.05\%$', fontsize=fsz,
+        verticalalignment='center', color=colors['Entropy-SGD'])
+    plt.text(105, 22.5, r'$18.85\%$', fontsize=fsz,
+        verticalalignment='center', color=colors['SGD'])
 
-# def wrn_svhn():
-#     f = rough(df[df['frac'] == 1], 1)
-#     plt.figure(f.number)
-#     plt.title('Wide-ResNet: SVHN')
-#     plt.xlabel('epochs x L')
-#     plt.xlim([0, 200])
-#     plt.ylim([15, 45])
-#     # set_ticks(xt=[0, 50, 100, 150, 200], yt=[15,25,35,45])
+    if opt['s']:
+        plt.savefig('../fig/wrn_cifar100_full_valid.pdf', bbox_inches='tight')
+
+def wrn_svhn():
+    f = rough(df[df['frac'] == 1], 1)
+    plt.figure(f.number)
+    plt.title('WRN-16-4: SVHN')
+    plt.xlabel('epochs x L')
+    plt.xlim([0, 200])
+    plt.ylim([15, 45])
+    # set_ticks(xt=[0, 50, 100, 150, 200], yt=[15,25,35,45])
 
 globals()[opt['m']]()
