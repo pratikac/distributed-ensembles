@@ -147,6 +147,11 @@ def train(e):
                 np.mean(ptop5), np.mean(np.std(ptop5,1)) ))
             pf, ptop1, ptop5 = [],[],[]
 
+        if int(timer()-t0) % (15*60) == 0:
+            print('Subsampled validation error')
+            val(e, frac=0.1)
+            model.train()
+
     if opt['l']:
         s = dict(e=e, i=0, f=f.avg, fstd=fstd.avg, top1=top1.avg, top1std=top1std.avg,
                 top5=top5.avg, top5std=top5std.avg,
@@ -158,7 +163,7 @@ def train(e):
         f.avg, fstd.avg, top1.avg, top1std.avg, top5.avg, top5std.avg, timer()-t0))
     print()
 
-def val(e):
+def val(e, frac=1):
     n = opt['n']
     ids = deepcopy(model.ids)
 
@@ -191,6 +196,9 @@ def val(e):
 
     val_loader = loaders[0]['val']
     maxb = len(val_loader)
+    if frac < 1:
+        maxb = int(maxb*frac)
+
     f, top1, top5 = AverageMeter(), AverageMeter(), AverageMeter()
     for bi in xrange(maxb):
         x,y = next(val_loader)

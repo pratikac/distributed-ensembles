@@ -30,7 +30,7 @@ class DistESGD(object):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0, llr=0.1,
                 weight_decay=0, nesterov=True, L=25, beta1=0.75,
-                g0=0.01, g1=1.0, gdot=0.5, eps=0,
+                g0=0.01, g1=1.0, gdot=0.5, eps=0, clip=None,
                 verbose=False,
                 t=0)
 
@@ -70,6 +70,7 @@ class DistESGD(object):
         llr = c['llr']
         beta1 = c['beta1']
         eps = c['eps']
+        clip = c['clip']
 
         if not 'w' in state:
             t = th.FloatTensor(N)
@@ -137,6 +138,9 @@ class DistESGD(object):
                     else:
                         dw[i] = cmdw[i]
 
+                if clip is not None:
+                    dw[i].clamp_(-clip, clip)
+
                 w[i].add_(-llr, dw[i])
                 mw[i].mul_(beta1).add_(1-beta1, w[i])
 
@@ -159,6 +163,9 @@ class DistESGD(object):
                     dw[i].add_(mom, mdw[i])
                 else:
                     dw[i] = mdw[i]
+
+            if clip is not None:
+                dw[i].clamp_(-clip, clip)
 
             w[i].copy_(wc[i])
             w[i].add_(-lr, dw[i])

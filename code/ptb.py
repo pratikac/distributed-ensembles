@@ -20,7 +20,7 @@ opt = add_args([
 ['-o', '/local2/pratikac/results', 'output'],
 ['-m', 'ptbs', 'ptbs | ptbl'],
 ['--dataset', 'ptb', 'ptb'],
-['-g', 3, 'gpu idx'],
+['-g', 0, 'gpu idx'],
 ['--gpus', '', 'groups of gpus'],
 ['-b', 20, 'batch_size'],
 ['-e', 0, 'start epoch'],
@@ -28,15 +28,16 @@ opt = add_args([
 ['--l2', -1., 'ell-2'],
 ['-B', 40, 'Max epochs'],
 ['-T', 35, 'bptt'],
-['--lr', 1.0, 'learning rate'],
+['--lr', 20.0, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
-['--mom', 0.5, 'mom'],
-['--clip', 1.0, 'gradient clipping'],
+['--mom', 0.0, 'mom'],
+['--clip', 0.25, 'gradient clipping'],
 ['-n', 1, 'replicas'],
 ['-L', 5, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
 ['--g1', 1.0, 'elastic gamma'],
 ['--gdot', 0.5, 'gamma dot'],
+['--beta1', 0.25, 'beta1'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -71,9 +72,9 @@ pprint(opt)
 
 optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=opt['mom'],
-            L=opt['L'], llr=lrschedule(opt, opt['e']),
-            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'],
-            num_batches=(ptb[0]['train'].size(0) -1) // opt['T'],
+            L=opt['L'], llr=0.1,
+            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/((ptb[0]['train'].size(0) -1) // opt['T']),
+            beta1=opt['beta1'], clip=opt['clip'],
             verbose=opt['v'],
             t=0))
 
@@ -83,6 +84,7 @@ def train(e):
 
     f, perp, dt = AverageMeter(), AverageMeter(), AverageMeter()
     fstd, perpstd = AverageMeter(), AverageMeter()
+    pf, pperp = [], []
 
     bsz = opt['b']
     maxb = (ptb[0]['train'].size(0) -1) // opt['T']
@@ -142,6 +144,9 @@ def train(e):
         perp.update(np.mean(np.exp(fs)))
         perpstd.update(np.std(np.exp(fs)))
 
+        pf.append(fs)
+        pperp.append(np.exp(fs))
+
         dt.update(timer()-_dt)
 
         if opt['l']:
@@ -149,11 +154,10 @@ def train(e):
                     fstd=np.std(fs), perpstd=np.std(np.exp(fs)), dt=dt.avg)
             logger.info('[LOG] ' + json.dumps(s))
 
-        if bi % 200 == 0 and bi != 0:
+        if bi % 25 == 0 and bi > 0:
             print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f'))%(dt.avg,
-                e,bi,maxb, f.avg, fstd.avg, perp.avg, perpstd.avg))
-            # f.reset(); fstd.reset()
-            # perp.reset(); perpstd.reset()
+                e,bi,maxb, np.mean(pf), np.mean(np.std(pf, 1)), np.mean(pperp), np.mean(np.std(pperp, 1))))
+            pf, pperp = [], []
 
     if opt['l']:
         s = dict(e=e, i=0, f=f.avg, fstd=fstd.avg, perp=perp.avg, perpstd=perpstd.avg,
@@ -237,9 +241,8 @@ if not opt['r'] == '':
     print('[Loading new optimizer]')
     optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=opt['mom'],
-            L=opt['L'], llr=lrschedule(opt, opt['e']),
-            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot'],
-            num_batches=(ptb[0]['train'].size(0) -1) // opt['T'],
+            L=opt['L'], llr=0.1,
+            g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/((ptb[0]['train'].size(0) -1) // opt['T']),
             verbose=opt['v'],
             t=d['t']))
 

@@ -108,7 +108,7 @@ class allcnn(nn.Module):
         if opt['augment'] and c1==96:
             opt['d'] = 0.0
 
-        if opt['dataset'] == 'cifar10':
+        if opt['dataset'] == 'cifar10' or opt['dataset'] == 'svhn':
             num_classes = 10
         elif opt['dataset'] == 'cifar100':
             num_classes = 100
@@ -239,6 +239,18 @@ class wrn101(wideresnet):
     def __init__(self, opt):
         opt['depth'], opt['widen'] = 10,1
         super(wrn101, self).__init__(opt)
+
+# class wrn521(wideresnet):
+#     name ='wrn521'
+#     def __init__(self, opt):
+#         opt['depth'], opt['widen'] = 10,1
+#         super(wrn521, self).__init__(opt)
+
+class wrn521(wideresnet):
+    name ='wrn521'
+    def __init__(self, opt):
+        opt['depth'], opt['widen'] = 52,1
+        super(wrn521, self).__init__(opt)
 
 class wrn164(wideresnet):
     name ='wrn164'
