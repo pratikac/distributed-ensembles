@@ -168,7 +168,7 @@ def lenet():
 def allcnn_cifar10():
     f = rough(df[df['frac'] == 1], 1)
     plt.figure(f.number)
-    plt.title(r'All-CNN: CIFAR-10 (full)')
+    plt.title(r'All-CNN: CIFAR-10 (full data)')
     plt.xlabel(r'wall-clock time (min)')
     plt.ylabel(r'top1 error ($\%$)')
     plt.xlim([0, 75])
@@ -191,7 +191,7 @@ def allcnn_cifar10():
             & (df['optim'] != 'SGD')]
     f = rough(pd.concat([df2, sgd]), 2)
     plt.figure(f.number)
-    plt.title(r'All-CNN: CIFAR-10 (frac = 0.5)')
+    plt.title(r'All-CNN: CIFAR-10 ($50\%$ data)')
     plt.xlabel(r'wall-clock time (min)')
     plt.ylabel(r'top1 error ($\%$)')
     plt.xlim([0, 50])
@@ -214,7 +214,7 @@ def allcnn_cifar10():
     sgd['frac'].replace(0.5, 0.25, inplace=True)
     f = rough(pd.concat([df2, sgd]), 3)
     plt.figure(f.number)
-    plt.title(r'All-CNN: CIFAR-10 (frac = 0.25)')
+    plt.title(r'All-CNN: CIFAR-10 ($25\%$ data)')
     plt.xlabel(r'wall-clock time (min)')
     plt.ylabel(r'top1 error ($\%$)')
     plt.xlim([0, 50])
@@ -243,7 +243,7 @@ def wrn_cifar10():
 
     plt.text(80, 3.6, r'$3.77$', fontsize=fsz,
         verticalalignment='center', color=colors['Parle (n=8)'])
-    plt.text(130, 3.6, r'$3.76$', fontsize=fsz,
+    plt.text(130, 3.6, r'$3.24$', fontsize=fsz,
         verticalalignment='center', color=colors['Parle (n=3)'])
     plt.text(250, 6.10, r'$4.38$', fontsize=fsz,
         verticalalignment='center', color=colors['Elastic-SGD (n=3)'])
@@ -267,8 +267,10 @@ def wrn_cifar100():
 
     plt.text(350, 16.1, r'$17.64$', fontsize=fsz,
         verticalalignment='center', color=colors['Parle (n=3)'])
-    plt.text(275, 16.1, r'$18.96$', fontsize=fsz,
+    plt.text(275, 16.1, r'$17.76$', fontsize=fsz,
         verticalalignment='center', color=colors['Parle (n=8)'])
+    plt.text(260, 22.5, r'$21.36$', fontsize=fsz,
+        verticalalignment='center', color=colors['Elastic-SGD (n=3)'])
     plt.text(350, 20.3, r'$19.05$', fontsize=fsz,
         verticalalignment='center', color=colors['Entropy-SGD'])
     plt.text(325, 22.5, r'$18.85$', fontsize=fsz,
@@ -283,9 +285,18 @@ def wrn_svhn():
     plt.title(r'WRN-16-4: SVHN')
     plt.xlabel(r'wall-clock time (min)')
     plt.ylabel(r'top1 error ($\%$)')
-    plt.xlim([0, 200])
-    plt.ylim([15, 45])
-    # set_ticks(xt=[0, 50, 100, 150, 200], yt=[15,25,35,45])
+    plt.xlim([0, 750])
+    plt.ylim([1.5, 3])
+    set_ticks(xt=[0, 200, 400, 600], yt=[1.5,2.0,2.5,3.0])
 
+    plt.text(650, 1.72, r'$1.65$', fontsize=fsz,
+        verticalalignment='center', color=colors['Parle (n=3)'])
+    plt.text(550, 1.58, r'$1.64$', fontsize=fsz,
+        verticalalignment='center', color=colors['Entropy-SGD'])
+    plt.text(450, 1.58, r'$1.58$', fontsize=fsz,
+        verticalalignment='center', color=colors['SGD'])
+
+    if opt['s']:
+        plt.savefig('../fig/wrn_svhn_full_valid.pdf', bbox_inches='tight')
 
 globals()[opt['m']]()
