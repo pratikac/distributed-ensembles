@@ -142,7 +142,7 @@ def train(e):
 
         bif = int(5/dt.avg)+1
         if bi % bif == 0 and bi > 0:
-            print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f%% %2.2f+-%2.2f%%'))%(dt.avg,
+            print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f+-%2.4f %2.2f+-%2.2f%% %2.2f+-%2.2f%%'))%(timer() - _dt,
                 e,bi,maxb, np.mean(pf), np.mean(np.std(pf, 1)), np.mean(ptop1), np.mean(np.std(ptop1,1)),
                 np.mean(ptop5), np.mean(np.std(ptop5,1)) ))
             pf, ptop1, ptop5 = [],[],[]

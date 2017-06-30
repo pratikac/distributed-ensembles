@@ -29,6 +29,22 @@ np.array([[1.0, 0.21631695868392545, 0.2190368412525279, 0.2257985907212584, 0.2
 [0.21939220623882888,0.21627253336323604,0.22563445976511864,0.2270392324734558, 1.0,0.2247278653663592],
 [0.22891580532930997,0.22116333385459286,0.2280974922675862,0.22461073014183178,0.2247278653663592,1.0]])
 
+dist['esgd']['softmax'] = \
+np.array([[ 0. ,0.03859545 , 0.03954068 , 0.03643564 , 0.03937737 , 0.03719942],
+[ 0.03928439,  0.         , 0.0387048  , 0.036002   , 0.03631428 , 0.03590457],
+[ 0.0396821 ,  0.03819139 , 0.         , 0.03683077 , 0.03801908 , 0.04059853],
+[ 0.03649438 , 0.03565641 , 0.03659741 , 0.         , 0.03532869 , 0.03704991],
+[ 0.04016383 , 0.03658656 , 0.03861252 , 0.03668762 , 0.         , 0.03613706],
+[ 0.03760405 , 0.03552647 , 0.04103455 , 0.03796665 , 0.03560781 , 0.        ]])
+
+dist['esgd']['softmax_dropout'] = \
+np.array([[ 0.1281419 ,  0.15463095,  0.15781942,  0.15473528,  0.15515113, 0.15252503],
+[ 0.15518377,  0.13352801,  0.15556815,  0.15335827,  0.15560943, 0.1573295 ],
+[ 0.15641736,  0.15673664,  0.134758  ,  0.15925809,  0.15512521, 0.1573126 ],
+[ 0.14833089,  0.1520756 ,  0.1542682 ,  0.12926223,  0.1498876 , 0.14913132],
+[ 0.15162233,  0.15031675,  0.15143204,  0.15120159,  0.12795655, 0.15157727],
+[ 0.15561783,  0.15838129,  0.15720345,  0.15897549,  0.1592684, 0.13328641]])
+
 # loc = '/home/pratik/Dropbox/cs269data/permute/sgd/'
 # dist['sgd']['unper'] = np.zeros((2,2))
 # for i in xrange(2):
@@ -58,7 +74,7 @@ np.array([[1.0, 0.21631695868392545, 0.2190368412525279, 0.2257985907212584, 0.2
 #         dist['esgd']['unper'][i,j] = np.mean(res)
 
 
-fsz = 12
+fsz = 18
 plt.rc('font', size=fsz)
 plt.rc('axes', titlesize=fsz)
 plt.rc('axes', labelsize=fsz)
@@ -70,9 +86,42 @@ plt.rc('figure', titlesize=fsz)
 a = np.around(dist['esgd']['per'], 3)
 plt.figure(1, figsize=(6,6))
 plt.clf()
-sns.heatmap(a, linewidths=0.5, annot=True, fmt='.2f', cbar=False, cmap='gist_yarg')
+ax = sns.heatmap(a, linewidths=0.5, fmt='.2f', cbar=False, annot=True, cmap='gist_yarg')
+#ax.invert_yaxis()
+plt.xticks([])
+plt.yticks([])
+
 plt.plot([0,0],[0,6],'k')
 plt.plot([0,6],[0,0],'k')
 plt.plot([6,6],[0,6],'k')
 plt.plot([0,6],[6,6],'k')
-plt.savefig('perdist.pdf', bbox_inches='tight')
+plt.savefig('../fig/perdist.pdf', bbox_inches='tight')
+
+a = np.around(dist['esgd']['softmax'], 3)
+plt.figure(2, figsize=(6,6))
+plt.clf()
+ax = sns.heatmap(a, linewidths=0.5, fmt='.2f', cbar=False, annot=True, cmap='gist_yarg')
+#ax.invert_yaxis()
+plt.xticks([])
+plt.yticks([])
+
+plt.plot([0,0],[0,6],'k')
+plt.plot([0,6],[0,0],'k')
+plt.plot([6,6],[0,6],'k')
+plt.plot([0,6],[6,6],'k')
+plt.savefig('../fig/softmax_avg.pdf', bbox_inches='tight')
+
+a = np.around(dist['esgd']['softmax_dropout'], 3)
+plt.figure(3, figsize=(6,6))
+plt.clf()
+ax = sns.heatmap(a, linewidths=0.5, fmt='.2f', cbar=False, annot=True, cmap='gist_yarg')
+#ax.invert_yaxis()
+plt.xticks([])
+plt.yticks([])
+
+plt.plot([0,0],[0,6],'k')
+plt.plot([0,6],[0,0],'k')
+plt.plot([6,6],[0,6],'k')
+plt.plot([0,6],[6,6],'k')
+plt.savefig('../fig/softmax_avg_dropout.pdf', bbox_inches='tight')
+
