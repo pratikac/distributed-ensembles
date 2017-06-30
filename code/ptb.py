@@ -249,12 +249,14 @@ if not opt['r'] == '':
     print('[Loaded model, check validation error]')
     val(d['e'], 'val')
 
+ef = 0
 try:
     for e in xrange(opt['e'], opt['B']):
         train(e)
         val(e, 'val')
         save_ensemble(e)
+        ef = e
 except KeyboardInterrupt:
     print('Running on test set before exiting...')
 
-val(opt['B']-1, 'test')
+val(ef, 'test')
