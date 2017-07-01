@@ -29,16 +29,16 @@ opt = add_args([
 ['-B', 40, 'Max epochs'],
 ['-T', 35, 'bptt'],
 ['--lr', 20.0, 'learning rate'],
-['--llr', 0.1, 'llr'],
+['--llr', 20.0, 'llr'],
 ['--lrs', '', 'learning rate schedule'],
-['--mom', 0.0, 'mom'],
+['--mom', 0.5, 'mom'],
 ['--clip', 0.25, 'gradient clipping'],
 ['-n', 1, 'replicas'],
 ['-L', 5, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
 ['--g1', 1.0, 'elastic gamma'],
 ['--gdot', 0.5, 'gamma dot'],
-['--beta1', 0.25, 'beta1'],
+['--beta1', 0.75, 'beta1'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -73,7 +73,7 @@ pprint(opt)
 
 optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=opt['mom'],
-            L=opt['L'], llr=opt['llr'],
+            L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/((ptb[0]['train'].size(0) -1) // opt['T']),
             beta1=opt['beta1'], clip=opt['clip'],
             verbose=opt['v'],
@@ -242,7 +242,7 @@ if not opt['r'] == '':
     print('[Loading new optimizer]')
     optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=opt['mom'],
-            L=opt['L'], llr=opt['llr'],
+            L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/((ptb[0]['train'].size(0) -1) // opt['T']),
             verbose=opt['v'],
             t=d['t']))
