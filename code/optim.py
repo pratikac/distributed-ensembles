@@ -139,7 +139,8 @@ class DistESGD(object):
                         dw[i] = cmdw[i]
 
                 if clip is not None:
-                    dw[i].clamp_(-clip, clip)
+                    if dw[i].norm() > clip:
+                        dw[i].mul_(clip/dw[i].norm())
 
                 w[i].add_(-llr, dw[i])
                 mw[i].mul_(beta1).add_(1-beta1, w[i])
@@ -165,7 +166,8 @@ class DistESGD(object):
                     dw[i] = mdw[i]
 
             if clip is not None:
-                dw[i].clamp_(-clip, clip)
+                if dw[i].norm() > clip:
+                    dw[i].mul_(clip/dw[i].norm())
 
             w[i].copy_(wc[i])
             w[i].add_(-lr, dw[i])

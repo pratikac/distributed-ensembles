@@ -241,12 +241,6 @@ class wrn101(wideresnet):
         opt['depth'], opt['widen'] = 10,1
         super(wrn101, self).__init__(opt)
 
-# class wrn521(wideresnet):
-#     name ='wrn521'
-#     def __init__(self, opt):
-#         opt['depth'], opt['widen'] = 10,1
-#         super(wrn521, self).__init__(opt)
-
 class wrn521(wideresnet):
     name ='wrn521'
     def __init__(self, opt):
@@ -270,12 +264,6 @@ class wrn2810(wideresnet):
     def __init__(self, opt):
         opt['depth'], opt['widen'] = 28, 10
         super(wrn2810, self).__init__(opt)
-
-# class wrn502(wideresnet):
-#     name ='wrn502'
-#     def __init__(self, opt):
-#         opt['depth'], opt['widen'] = 50, 2
-#         super(wrn502, self).__init__(opt)
 
 class resnet18(nn.Module):
     name = 'resnet18'
@@ -358,7 +346,7 @@ class LSTM(nn.Module):
         self.nlayers = nlayers
 
     def init_weights(self):
-        dw = 0.1
+        dw = 0.05
         self.encoder.weight.data.uniform_(-dw, dw)
         self.decoder.bias.data.fill_(0)
         self.decoder.weight.data.uniform_(-dw, dw)

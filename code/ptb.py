@@ -29,6 +29,7 @@ opt = add_args([
 ['-B', 40, 'Max epochs'],
 ['-T', 35, 'bptt'],
 ['--lr', 20.0, 'learning rate'],
+['--llr', 0.1, 'llr'],
 ['--lrs', '', 'learning rate schedule'],
 ['--mom', 0.0, 'mom'],
 ['--clip', 0.25, 'gradient clipping'],
@@ -72,7 +73,7 @@ pprint(opt)
 
 optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=opt['mom'],
-            L=opt['L'], llr=0.1,
+            L=opt['L'], llr=opt['llr'],
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/((ptb[0]['train'].size(0) -1) // opt['T']),
             beta1=opt['beta1'], clip=opt['clip'],
             verbose=opt['v'],
@@ -125,8 +126,8 @@ def train(e):
                 model.backward(fs)
                 th.cuda.synchronize()
 
-                for i in xrange(n):
-                    nn.utils.clip_grad_norm(model.w[i].parameters(), opt['clip'])
+                # for i in xrange(n):
+                #     nn.utils.clip_grad_norm(model.w[i].parameters(), opt['clip'])
                 #     for p in model.w[i].parameters():
                 #         p.data.add_(-optimizer.config['lr'], p.grad.data)
                 # for p1, p2 in zip(model.ref.parameters(), model.w[0].parameters()):
@@ -241,7 +242,7 @@ if not opt['r'] == '':
     print('[Loading new optimizer]')
     optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=opt['mom'],
-            L=opt['L'], llr=0.1,
+            L=opt['L'], llr=opt['llr'],
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/((ptb[0]['train'].size(0) -1) // opt['T']),
             verbose=opt['v'],
             t=d['t']))
