@@ -103,20 +103,24 @@ def train(e):
                 xs, ys = [None]*n, [None]*n
                 fs, errs, errs5 = [None]*n, [None]*n, [None]*n
 
+                #_dt1 = timer()
                 for i in xrange(n):
                     x, y = next(loaders[i]['train'])
                     xs[i], ys[i] =  Variable(x.cuda(ids[i], async=True)), \
                             Variable(y.squeeze().cuda(ids[i], async=True))
+                #print('dt [data]: ', timer()-_dt1)
 
+                #_dt2 = timer()
                 yhs = model(xs, ys)
                 for i in xrange(n):
                     fs[i] = criterion.cuda(ids[i])(yhs[i], ys[i])
                     acc = accuracy(yhs[i].data, ys[i].data, topk=(1,5))
                     errs[i] = 100. - acc[0]
                     errs5[i] = 100. - acc[1]
-                model.backward(fs)
+                #model.backward(fs)
 
                 fs = [fs[i].data[0] for i in xrange(n)]
+                print('dt [fprop+bprop]: ', timer()-_dt2)
                 return fs, errs, errs5
             return feval
 
