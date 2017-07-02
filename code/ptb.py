@@ -47,6 +47,9 @@ opt = add_args([
 ['--save', False, 'save ckpt'],
 ])
 
+if opt['n'] > 1:
+    opt['g'] = th.cuda.device_count()
+
 if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
 
@@ -75,12 +78,15 @@ optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=opt['mom'],
             L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/((ptb[0]['train'].size(0) -1) // opt['T']),
+            g0max=1, g1max=10,
             beta1=opt['beta1'], clip=opt['clip'],
             verbose=opt['v'],
             t=0))
 
 def train(e):
     optimizer.config['lr'] = lrschedule(opt, e, logger)
+    optimizer.config['llr'] = lrschedule(opt, e, logger)
+
     model.train()
 
     f, perp, dt = AverageMeter(), AverageMeter(), AverageMeter()
@@ -197,7 +203,6 @@ def val(e, src):
         yh,h = model.ref(x, h)
         _f = criterion.cuda(rid)(yh.view(-1, opt['vocab']), y).data[0]
         f = f + _f*len(x)
-        #print(i, _f, len(x))
 
     f = f/len(ptb[0][src])
     if opt['l']:
@@ -244,6 +249,7 @@ if not opt['r'] == '':
         dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=opt['mom'],
             L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/((ptb[0]['train'].size(0) -1) // opt['T']),
+            g0max=1, g1max=10,
             verbose=opt['v'],
             t=d['t']))
 

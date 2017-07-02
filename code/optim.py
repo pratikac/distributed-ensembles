@@ -31,6 +31,7 @@ class DistESGD(object):
         defaults = dict(lr=0.1, momentum=0.9, dampening=0, llr=0.1,
                 weight_decay=0, nesterov=True, L=25, beta1=0.75,
                 g0=0.01, g1=1.0, gdot=0.5, eps=0, clip=None,
+                g0max=1, g1max=10,
                 verbose=False,
                 t=0)
 
@@ -118,8 +119,8 @@ class DistESGD(object):
             dwc[i].copy_(dw[i])
             mw[i].copy_(w[i])
 
-        gsgld = min(g0*(1+gdot)**state['t'], 1)
-        gesgd = min(g1*(1+gdot)**state['t'], 10)
+        gsgld = min(g0*(1+gdot)**state['t'], c['g0max'])
+        gesgd = min(g1*(1+gdot)**state['t'], c['g1max'])
 
         for l in xrange(L):
             fs, errs, errs5 = feval()
@@ -176,7 +177,7 @@ class DistESGD(object):
         r.copy_(comm.reduce_add(w, rid)).mul_(1/float(n))
 
         e = 1e-12
-        if verbose and state['t'] % 1 == 0:
+        if verbose and state['t'] % 25 == 0:
             for i in xrange(n):
                 debug = dict(
                     dw=dw[i].norm(),
