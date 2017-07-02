@@ -85,7 +85,7 @@ optimizer = getattr(optim, opt['optim'])(model, config =
 
 def train(e):
     optimizer.config['lr'] = lrschedule(opt, e, logger)
-    optimizer.config['llr'] = lrschedule(opt, e, logger)
+    #optimizer.config['llr'] = lrschedule(opt, e, logger)
 
     model.train()
 

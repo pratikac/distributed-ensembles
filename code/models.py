@@ -94,6 +94,7 @@ class lenet(nn.Module):
 class lenetl(lenet):
     name = 'lenetl'
     def __init__(self, opt, c1=40, c2=100, c3=1000):
+        opt['d'] = 0.5
         super(lenetl, self).__init__(opt, c1, c2, c3)
 
 class allcnn(nn.Module):
