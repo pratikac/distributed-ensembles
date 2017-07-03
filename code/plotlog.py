@@ -67,7 +67,7 @@ colors = {  'SGD':'k', 'SGD (full)':'k',
 normalize_params = dict(
     wrn_cifar10 = {'nb': 391, 'SGD': 0.28, 'Elastic-SGD (n=3)': 0.6, 'Entropy-SGD': 6.8, 'Parle': 12.5},
     wrn_cifar100 = {'nb': 391, 'SGD': 0.28, 'Elastic-SGD (n=3)': 0.6, 'Entropy-SGD': 6.8, 'Parle': 12.5},
-    wrn_svhn = {'nb': 4722, 'SGD': 0.04, 'Elastic-SGD (n=3)': 0.08, 'Entropy-SGD': 1.02, 'Parle': 1.89},
+    wrn_svhn = {'nb': 4722, 'SGD': 0.04, 'Elastic-SGD (n=3)': 0.08, 'Entropy-SGD': 1.02, 'Parle': 1.88},
     allcnn_cifar10 = {'nb': 391, 'SGD': 0.03, 'Elastic-SGD (n=3)': 0.06, 'Elastic-SGD (n=6)': 0.06, 'Entropy-SGD': 0.67, 'Parle': 1.29},
     allcnn_cifar100 = {'nb': 391, 'SGD': 0.03, 'Elastic-SGD (n=3)': 0.06, 'Elastic-SGD (n=6)': 0.06, 'Entropy-SGD': 0.67, 'Parle': 1.29},
     lenet = {'nb': 469, 'SGD': 0.009, 'Elastic-SGD (n=3)': 0.007, 'Elastic-SGD (n=6)': 0.015, 'Entropy-SGD': 0.21, 'Parle': 0.18},
@@ -108,7 +108,7 @@ df['t'] = df['t']/60.0
 sgd = df[(df['optim']=='SGD') & (df['frac'] == 1.0)].copy()
 sgd.replace({'SGD':'SGD (full)'}, inplace=True)
 
-def rough(d, idx=1):
+def rough(d, idx=1, train=False):
     dc = d.copy()
     dc = dc.filter(items=['f','top1','s','t','optim','n','val','train'])
 
@@ -116,29 +116,33 @@ def rough(d, idx=1):
     fig = plt.figure(idx, figsize=(8,7))
     plt.clf()
 
-    dv = dc[(dc['val'] == True)]
-    sns.tsplot(time='t',value='top1',data=dv,
-                unit='s',condition='optim', color=colors)
-    sns.tsplot(time='t',value='top1',
-                data=   dv[(dv['optim'] != 'SGD')&
-                        (dv['optim'] != 'SGD (full)')&
-                        (dv['optim'] != 'Elastic-SGD (n=3)')&
-                        (dv['optim'] != 'Elastic-SGD (n=6)')&
-                        (dv['optim'] != 'Elastic-SGD (n=8)')],
-                marker='o', interpolate=False,
-                unit='s',condition='optim', color=colors,
-                legend=False)
+    if not train:
+        dv = dc[(dc['val'] == True)]
+        sns.tsplot(time='t',value='top1',data=dv,
+                    unit='s',condition='optim', color=colors)
+        sns.tsplot(time='t',value='top1',
+                    data=   dv[(dv['optim'] != 'SGD')&
+                            (dv['optim'] != 'SGD (full)')&
+                            (dv['optim'] != 'Elastic-SGD (n=3)')&
+                            (dv['optim'] != 'Elastic-SGD (n=6)')&
+                            (dv['optim'] != 'Elastic-SGD (n=8)')],
+                    marker='o', interpolate=False,
+                    unit='s',condition='optim', color=colors,
+                    legend=False)
 
-    # # train
-    # dt = dc[(dc['train'] == True)]
-    # sns.tsplot(time='t',value='top1',data=dt,
-    #             unit='s',condition='optim', color=colors,
-    #             legend=False)
-    # sns.tsplot(time='t',value='top1',
-    #             data=dt[(dt['optim'] != 'SGD')],
-    #             marker='o', interpolate=False,
-    #             unit='s',condition='optim', color=colors,
-    #             legend=False)
+    else:
+        dt = dc[(dc['train'] == True)]
+        sns.tsplot(time='t',value='top1',data=dt,
+                    unit='s',condition='optim', color=colors)
+        sns.tsplot(time='t',value='top1',
+                    data=   dt[(dt['optim'] != 'SGD')&
+                            (dt['optim'] != 'SGD (full)')&
+                            (dt['optim'] != 'Elastic-SGD (n=3)')&
+                            (dt['optim'] != 'Elastic-SGD (n=6)')&
+                            (dt['optim'] != 'Elastic-SGD (n=8)')],
+                    marker='o', interpolate=False,
+                    unit='s',condition='optim', color=colors,
+                    legend=False)
 
     plt.grid('on')
     plt.legend(markerscale=0)
@@ -247,13 +251,37 @@ def wrn_cifar10():
         verticalalignment='center', color=colors['Parle (n=3)'])
     plt.text(250, 6.10, r'$4.38$', fontsize=fsz,
         verticalalignment='center', color=colors['Elastic-SGD (n=3)'])
-    plt.text(350, 4.9, r'$4.23$', fontsize=fsz,
+    plt.text(350, 5.1, r'$4.23$', fontsize=fsz,
         verticalalignment='center', color=colors['Entropy-SGD'])
-    plt.text(300, 4.9, r'$4.29$', fontsize=fsz,
+    plt.text(300, 5.1, r'$4.29$', fontsize=fsz,
         verticalalignment='center', color=colors['SGD'])
 
     if opt['s']:
         plt.savefig('../fig/wrn_cifar10_full_valid.pdf', bbox_inches='tight')
+
+
+    f = rough(df[df['frac'] == 1], 2, train=True)
+    plt.figure(f.number)
+    plt.title(r'WRN-28-10: CIFAR-10')
+    plt.xlabel(r'wall-clock time (min)')
+    plt.ylabel(r'training error ($\%$)')
+    plt.xlim([0, 400])
+    plt.ylim([0,15])
+    set_ticks(xt=[0, 100, 200, 300, 400], yt=[0, 5, 10, 15])
+
+    plt.text(345, 4.11, r'$4.11$', fontsize=fsz,
+        verticalalignment='center', color=colors['Parle (n=8)'])
+    plt.text(350, 6.5, r'$5.03$', fontsize=fsz,
+        verticalalignment='center', color=colors['Parle (n=3)'])
+    plt.text(320, 0.5, r'$0.003$', fontsize=fsz,
+        verticalalignment='center', color=colors['Elastic-SGD (n=3)'])
+    plt.text(350, 1.8, r'$0.64$', fontsize=fsz,
+        verticalalignment='center', color=colors['Entropy-SGD'])
+    plt.text(270, 0.5, r'$0.01$', fontsize=fsz,
+        verticalalignment='center', color=colors['SGD'])
+
+    if opt['s']:
+        plt.savefig('../fig/wrn_cifar10_full_train.pdf', bbox_inches='tight')
 
 def wrn_cifar100():
     f = rough(df[df['frac'] == 1], 1)
@@ -279,24 +307,70 @@ def wrn_cifar100():
     if opt['s']:
         plt.savefig('../fig/wrn_cifar100_full_valid.pdf', bbox_inches='tight')
 
+    f = rough(df[df['frac'] == 1], 2, train=True)
+    plt.figure(f.number)
+    plt.title(r'WRN-28-10: CIFAR-100')
+    plt.xlabel(r'wall-clock time (min)')
+    plt.ylabel(r'training error ($\%$)')
+    plt.xlim([0, 400])
+    plt.ylim([0, 25])
+    set_ticks(xt=[0, 100, 200, 300, 400], yt=[0, 5, 10, 15, 20, 25])
+
+    plt.text(360, 9.6, r'$8.80$', fontsize=fsz,
+        verticalalignment='center', color=colors['Parle (n=3)'])
+    plt.text(360, 5.5, r'$7.32$', fontsize=fsz,
+        verticalalignment='center', color=colors['Parle (n=8)'])
+    plt.text(320, 0.5, r'$0.02$', fontsize=fsz,
+        verticalalignment='center', color=colors['Elastic-SGD (n=3)'])
+    plt.text(360, 3.06, r'$1.43$', fontsize=fsz,
+        verticalalignment='center', color=colors['Entropy-SGD'])
+    plt.text(270, 0.5, r'$0.02$', fontsize=fsz,
+        verticalalignment='center', color=colors['SGD'])
+
+    if opt['s']:
+        plt.savefig('../fig/wrn_cifar100_full_train.pdf', bbox_inches='tight')
+
 def wrn_svhn():
     f = rough(df[df['frac'] == 1], 1)
     plt.figure(f.number)
     plt.title(r'WRN-16-4: SVHN')
     plt.xlabel(r'wall-clock time (min)')
     plt.ylabel(r'top1 error ($\%$)')
-    plt.xlim([0, 750])
+    plt.xlim([0, 600])
     plt.ylim([1.5, 3])
     set_ticks(xt=[0, 200, 400, 600], yt=[1.5,2.0,2.5,3.0])
 
-    plt.text(650, 1.72, r'$1.65$', fontsize=fsz,
+    plt.text(540, 1.79, r'$1.68$', fontsize=fsz,
         verticalalignment='center', color=colors['Parle (n=3)'])
-    plt.text(550, 1.58, r'$1.64$', fontsize=fsz,
+    plt.text(520, 1.58, r'$1.64$', fontsize=fsz,
         verticalalignment='center', color=colors['Entropy-SGD'])
-    plt.text(450, 1.58, r'$1.58$', fontsize=fsz,
+    plt.text(450, 1.79, r'$1.57$', fontsize=fsz,
+        verticalalignment='center', color=colors['Elastic-SGD (n=3)'])
+    plt.text(450, 1.58, r'$1.62$', fontsize=fsz,
         verticalalignment='center', color=colors['SGD'])
 
     if opt['s']:
         plt.savefig('../fig/wrn_svhn_full_valid.pdf', bbox_inches='tight')
+
+    f = rough(df[df['frac'] == 1], 2, train=True)
+    plt.figure(f.number)
+    plt.title(r'WRN-16-4: SVHN')
+    plt.xlabel(r'wall-clock time (min)')
+    plt.ylabel(r'training error ($\%$)')
+    plt.xlim([0, 600])
+    plt.ylim([0, 3])
+    set_ticks(xt=[0, 200, 400, 600], yt=[0, 1.0, 2.0, 3.0])
+
+    plt.text(525, 1.4, r'$1.16$', fontsize=fsz,
+        verticalalignment='center', color=colors['Parle (n=3)'])
+    plt.text(470, 1, r'$1.14$', fontsize=fsz,
+        verticalalignment='center', color=colors['Entropy-SGD'])
+    plt.text(480, 0.3, r'$0.08$', fontsize=fsz,
+        verticalalignment='center', color=colors['Elastic-SGD (n=3)'])
+    plt.text(420, 0.3, r'$0.13$', fontsize=fsz,
+        verticalalignment='center', color=colors['SGD'])
+
+    if opt['s']:
+        plt.savefig('../fig/wrn_svhn_full_train.pdf', bbox_inches='tight')
 
 globals()[opt['m']]()
