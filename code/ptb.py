@@ -29,15 +29,16 @@ opt = add_args([
 ['-B', 40, 'Max epochs'],
 ['-T', 35, 'bptt'],
 ['--lr', 20.0, 'learning rate'],
+['--llr', 20.0, 'llr'],
 ['--lrs', '', 'learning rate schedule'],
-['--mom', 0.0, 'mom'],
+['--mom', 0.5, 'mom'],
 ['--clip', 0.25, 'gradient clipping'],
 ['-n', 1, 'replicas'],
 ['-L', 5, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
 ['--g1', 1.0, 'elastic gamma'],
 ['--gdot', 0.5, 'gamma dot'],
-['--beta1', 0.25, 'beta1'],
+['--beta1', 0.75, 'beta1'],
 ['-s', 42, 'seed'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
@@ -45,6 +46,9 @@ opt = add_args([
 ['-r', '', 'resume ckpt'],
 ['--save', False, 'save ckpt'],
 ])
+
+if opt['n'] > 1:
+    opt['g'] = th.cuda.device_count()
 
 if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
@@ -72,14 +76,17 @@ pprint(opt)
 
 optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=opt['mom'],
-            L=opt['L'], llr=0.1,
+            L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/((ptb[0]['train'].size(0) -1) // opt['T']),
+            g0max=1, g1max=10,
             beta1=opt['beta1'], clip=opt['clip'],
             verbose=opt['v'],
             t=0))
 
 def train(e):
     optimizer.config['lr'] = lrschedule(opt, e, logger)
+    #optimizer.config['llr'] = lrschedule(opt, e, logger)
+
     model.train()
 
     f, perp, dt = AverageMeter(), AverageMeter(), AverageMeter()
@@ -125,8 +132,8 @@ def train(e):
                 model.backward(fs)
                 th.cuda.synchronize()
 
-                for i in xrange(n):
-                    nn.utils.clip_grad_norm(model.w[i].parameters(), opt['clip'])
+                # for i in xrange(n):
+                #     nn.utils.clip_grad_norm(model.w[i].parameters(), opt['clip'])
                 #     for p in model.w[i].parameters():
                 #         p.data.add_(-optimizer.config['lr'], p.grad.data)
                 # for p1, p2 in zip(model.ref.parameters(), model.w[0].parameters()):
@@ -196,7 +203,6 @@ def val(e, src):
         yh,h = model.ref(x, h)
         _f = criterion.cuda(rid)(yh.view(-1, opt['vocab']), y).data[0]
         f = f + _f*len(x)
-        #print(i, _f, len(x))
 
     f = f/len(ptb[0][src])
     if opt['l']:
@@ -241,8 +247,9 @@ if not opt['r'] == '':
     print('[Loading new optimizer]')
     optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], momentum=opt['mom'],
-            L=opt['L'], llr=0.1,
+            L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/((ptb[0]['train'].size(0) -1) // opt['T']),
+            g0max=1, g1max=10,
             verbose=opt['v'],
             t=d['t']))
 
