@@ -50,7 +50,7 @@ class sampler_t:
             if self.balanced_sampling:
                 self.idx.copy_(th.multinomial(self.weights, self.b, True))
             else:
-                self.idx.random_(0,self.n-1)
+                self.idx.random_(0,self.n)
 
             x,y  = th.index_select(self.x, 0, self.idx), \
                     th.index_select(self.y, 0, self.idx)
