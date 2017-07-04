@@ -147,8 +147,8 @@ class DistESGD(object):
                 mw[i].mul_(beta1).add_(1-beta1, w[i])
 
         # update reference with mw
-        #r.zero_()
-        #r.copy_(comm.reduce_add(mw, rid)).mul_(1/float(n))
+        r.zero_()
+        r.copy_(comm.reduce_add(mw, rid)).mul_(1/float(n))
         rc = comm.broadcast(r, ids)
 
         for i in xrange(n):
