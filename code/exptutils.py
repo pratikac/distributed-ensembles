@@ -150,13 +150,14 @@ def setup(t=4, s=42, gpus=[0,1,2]):
     th.set_num_threads(t)
     np.random.seed(s)
     th.manual_seed(s)
-
     # if len(np.unique(gpus)) == 1:
     #     th.cuda.set_device(gpus[0])
     #     # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     #     # os.environ["CUDA_VISIBLE_DEVICES"]=str(gpus[0])
     #     th.cuda.manual_seed(s)
+    th.cuda.manual_seed(s)
     th.cuda.manual_seed_all(s)
+    th.randn(8)
     cudnn.benchmark = True
 
 def dry_feed(m, loader, mid=0, opt=None):
@@ -177,8 +178,8 @@ def dry_feed(m, loader, mid=0, opt=None):
     m.train()
     cache = set_dropout()
     maxb = len(loader)
-    if opt and opt['dataset'] == 'imagenet':
-        maxb = 1000
+    # if opt and opt['dataset'] == 'imagenet':
+    #     maxb = 1000
     for bi in xrange(maxb):
         x,y = next(loader)
         x,y =   Variable(x.cuda(mid), volatile=True), \
