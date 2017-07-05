@@ -78,7 +78,13 @@ for n in [3,6,8]:
     for k in normalize_params:
         normalize_params[k]['Parle (n=%d)'%n] = normalize_params[k]['Parle']
 
-df = loaddir(os.path.join(opt['l'], opt['m']), force=opt['f'])
+if opt['r']:
+    loc = opt['l']
+    df = loaddir(loc, expr='/*', force=opt['f'])
+else:
+    loc = os.path.join(opt['l'], opt['m'])
+    df = loaddir(loc, force=opt['f'])
+
 df = df[(df['summary'] == True)]
 df = df.filter(items=whitelist)
 
@@ -129,7 +135,6 @@ def rough(d, idx=1, train=False):
                     marker='o', interpolate=False,
                     unit='s',condition='optim', color=colors,
                     legend=False)
-
     else:
         dt = dc[(dc['train'] == True)]
         sns.tsplot(time='t',value='top1',data=dt,
@@ -373,4 +378,8 @@ def wrn_svhn():
     if opt['s']:
         plt.savefig('../fig/wrn_svhn_full_train.pdf', bbox_inches='tight')
 
-globals()[opt['m']]()
+if not opt['r']:
+    globals()[opt['m']]()
+else:
+    rough(df, 1)
+    rough(df, 2, train=True)

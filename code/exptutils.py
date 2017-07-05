@@ -151,16 +151,15 @@ def setup(t=4, s=42, gpus=[0,1,2]):
     np.random.seed(s)
     th.manual_seed(s)
 
-    if len(np.unique(gpus)) == 1:
-        th.cuda.set_device(gpus[0])
-        # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-        # os.environ["CUDA_VISIBLE_DEVICES"]=str(gpus[0])
-        th.cuda.manual_seed(s)
-    else:
-        th.cuda.manual_seed_all(s)
+    # if len(np.unique(gpus)) == 1:
+    #     th.cuda.set_device(gpus[0])
+    #     # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+    #     # os.environ["CUDA_VISIBLE_DEVICES"]=str(gpus[0])
+    #     th.cuda.manual_seed(s)
+    th.cuda.manual_seed_all(s)
     cudnn.benchmark = True
 
-def dry_feed(m, loader, id=0):
+def dry_feed(m, loader, mid=0, opt=None):
     def set_dropout(cache = None, p=0):
         if cache is None:
             cache = []
@@ -178,13 +177,15 @@ def dry_feed(m, loader, id=0):
     m.train()
     cache = set_dropout()
     maxb = len(loader)
+    if opt and opt['dataset'] == 'imagenet':
+        maxb = 1000
     for bi in xrange(maxb):
         x,y = next(loader)
-        x,y =   Variable(x.cuda(id, async=True), volatile=True), \
-                Variable(y.squeeze().cuda(id, async=True), volatile=True)
+        x,y =   Variable(x.cuda(mid), volatile=True), \
+                Variable(y.squeeze().cuda(mid), volatile=True)
         yh = m(x)
     set_dropout(cache)
-
+    m.eval()
 
 def lrschedule(opt, e, logger=None):
     if opt['lrs'] == '':

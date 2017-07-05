@@ -103,14 +103,11 @@ def train(e):
                 xs, ys = [None]*n, [None]*n
                 fs, errs, errs5 = [None]*n, [None]*n, [None]*n
 
-                #_dt1 = timer()
                 for i in xrange(n):
                     x, y = next(loaders[i]['train'])
                     xs[i], ys[i] =  Variable(x.cuda(ids[i], async=True)), \
                             Variable(y.squeeze().cuda(ids[i], async=True))
-                #print('dt [data]: ', timer()-_dt1)
 
-                #_dt2 = timer()
                 yhs = model(xs, ys)
                 for i in xrange(n):
                     fs[i] = criterion.cuda(ids[i])(yhs[i], ys[i])
@@ -119,8 +116,11 @@ def train(e):
                     errs5[i] = 100. - acc[1]
                 model.backward(fs)
 
+                for g in gpus:
+                    with th.cuda.device(g):
+                        th.cuda.synchronize()
+
                 fs = [fs[i].data[0] for i in xrange(n)]
-                #print('dt [fprop+bprop]: ', timer()-_dt2)
                 return fs, errs, errs5
             return feval
 
@@ -141,7 +141,7 @@ def train(e):
 
         if opt['l']:
             s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), top1=np.mean(errs), top5=np.mean(errs5),
-                    fstd=np.std(fs), top1std=np.std(errs), top5std = np.std(errs5), dt=dt.avg)
+                    fstd=np.std(fs), top1std=np.std(errs), top5std = np.std(errs5), dt=timer() - _dt)
             logger.info('[LOG] ' + json.dumps(s))
 
         bif = int(5/dt.avg)+1
@@ -161,6 +161,10 @@ def train(e):
     print((color('blue', '++[%2d] %2.4f+-%2.4f %2.2f+-%2.2f%% %2.2f+-%2.2f%% [%2.2fs]'))% (e,
         f.avg, fstd.avg, top1.avg, top1std.avg, top5.avg, top5std.avg, timer()-t0))
     print()
+
+def check_models(m1, m2):
+    for p1, p2 in zip(m1.parameters(), m2.parameters()):
+        assert (p1-p2).norm() < 1e-12
 
 def val(e):
     n = opt['n']
@@ -189,8 +193,10 @@ def val(e):
             print((color('red', '++[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, i, f.avg, top1.avg, top5.avg))
 
     rid = model.refid
-    if not opt['m'][:6] == 'resnet':
-        dry_feed(model.ref, loaders[0]['train_full'], id=rid)
+    val_model = model.ref
+    if n == 1:
+        val_model = model.w[0]
+    dry_feed(val_model, loaders[0]['train_full'], mid=rid)
     model.eval()
 
     val_loader = loaders[0]['val']
@@ -201,10 +207,10 @@ def val(e):
         x,y = next(val_loader)
         bsz = x.size(0)
 
-        xc,yc = Variable(x.cuda(rid, async=True), volatile=True), \
-                Variable(y.squeeze().cuda(rid, async=True), volatile=True)
+        xc,yc = Variable(x.cuda(rid), volatile=True), \
+                Variable(y.squeeze().cuda(rid), volatile=True)
 
-        yh = model.ref(xc)
+        yh = val_model(xc)
         _f = criterion.cuda(rid)(yh, yc).data[0]
         acc = accuracy(yh.data, yc.data, topk=(1,5))
         err, err5 = 100. - acc[0], 100. - acc[1]

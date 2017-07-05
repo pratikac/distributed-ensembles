@@ -69,9 +69,9 @@ class lenet(nn.Module):
         def convbn(ci,co,ksz,psz,p):
             return nn.Sequential(
                 nn.Conv2d(ci,co,ksz),
+                nn.BatchNorm2d(co),
                 nn.ReLU(True),
                 nn.MaxPool2d(psz,stride=psz),
-                nn.BatchNorm2d(co),
                 nn.Dropout(p))
 
         self.m = nn.Sequential(
@@ -79,6 +79,7 @@ class lenet(nn.Module):
             convbn(c1,c2,5,2,opt['d']),
             View(c2*2*2),
             nn.Linear(c2*2*2, c3),
+            nn.BatchNorm1d(c3),
             nn.ReLU(True),
             nn.Dropout(opt['d']),
             nn.Linear(c3,10))
