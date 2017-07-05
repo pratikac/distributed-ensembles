@@ -139,7 +139,7 @@ def train(e):
         ptop1.append(errs)
         ptop5.append(errs5)
 
-        if opt['l']:
+        if opt['l'] and bi % 25 ==0 and bi > 0:
             s = dict(i=bi + e*maxb, e=e, f=np.mean(fs), top1=np.mean(errs), top5=np.mean(errs5),
                     fstd=np.std(fs), top1std=np.std(errs), top5std = np.std(errs5), dt=timer() - _dt)
             logger.info('[LOG] ' + json.dumps(s))
