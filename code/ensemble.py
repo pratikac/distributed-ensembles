@@ -196,7 +196,8 @@ def val(e):
     val_model = model.ref
     if n == 1:
         val_model = model.w[0]
-    dry_feed(val_model, loaders[0]['train_full'], mid=rid)
+    if not opt['dataset'] == 'imagenet':
+        dry_feed(val_model, loaders[0]['train_full'], mid=rid)
     model.eval()
 
     val_loader = loaders[0]['val']
