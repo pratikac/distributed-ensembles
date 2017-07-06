@@ -183,7 +183,7 @@ def val(e):
     n = opt['n']
     ids = deepcopy(model.ids)
 
-    if opt['frac'] < 1 and False and (not opt['dataset'] == 'imagenet'):
+    if opt['frac'] < 1 and False and (not 'imagenet' in opt['dataset']):
         model.train()
         print((color('red', 'Full train:')))
         for i in xrange(n):
@@ -209,7 +209,7 @@ def val(e):
     val_model = model.ref
     if n == 1:
         val_model = model.w[0]
-    if (not opt['dataset'] == 'imagenet'):
+    if (not 'imagenet' in opt['dataset']):
         dry_feed(val_model, loaders[0]['train_full_iter'], mid=rid)
     model.eval()
 
