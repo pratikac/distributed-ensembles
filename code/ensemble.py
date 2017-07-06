@@ -52,8 +52,6 @@ gpus = [i if opt['g'] >= ngpus else opt['g'] for i in xrange(ngpus)]
 if not opt['gpus'] == '':
     gpus = json.loads(opt['gpus'])
 setup(t=4, s=opt['s'], gpus=gpus)
-if opt['dataset'] == 'imagenet':
-    opt['b'] = 32
 
 model = models.ReplicateModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
