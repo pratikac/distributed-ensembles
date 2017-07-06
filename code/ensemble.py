@@ -96,7 +96,7 @@ def train(e):
     bsz = opt['b']
     maxb = len(loaders[0]['train'])
     for i in xrange(n):
-        train_iters[i] = loaders[0]['train'].__iter__()
+        train_iters[i] = loaders[i]['train'].__iter__()
 
     t0 = timer()
 
