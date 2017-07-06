@@ -210,14 +210,14 @@ def imagenet_threaded(opt, only_train=False):
     train_loader = th.utils.data.DataLoader(
         train_folder,
         batch_size=bsz, shuffle=True,
-        num_workers=nw, pin_memory=True)
+        num_workers=nw)
 
     val_folder = datasets.ImageFolder(valdir, transforms.Compose(
             input_transform + [transforms.CenterCrop(224)] + affine + normalize))
     val_loader = th.utils.data.DataLoader(
         val_folder,
         batch_size=bsz, shuffle=False,
-        num_workers=nw, pin_memory=True)
+        num_workers=nw)
 
     return train_loader, val_loader, val_loader, train_loader
 
