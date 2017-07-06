@@ -197,7 +197,6 @@ def imagenet_threaded(opt, only_train=False):
     valdir = os.path.join(loc, 'val')
 
     input_transform = [transforms.Scale(256)]
-    affine = []
 
     normalize = [transforms.ToTensor(),
                 transforms.Normalize(mean=[0.485, 0.456, 0.406],
@@ -206,18 +205,18 @@ def imagenet_threaded(opt, only_train=False):
 
     train_folder = datasets.ImageFolder(traindir, transforms.Compose([
             transforms.RandomSizedCrop(224),
-            transforms.RandomHorizontalFlip()] + affine + normalize))
+            transforms.RandomHorizontalFlip()] + normalize))
     train_loader = th.utils.data.DataLoader(
         train_folder,
         batch_size=bsz, shuffle=True,
-        num_workers=nw)
+        num_workers=nw, pin_memory=True)
 
     val_folder = datasets.ImageFolder(valdir, transforms.Compose(
-            input_transform + [transforms.CenterCrop(224)] + affine + normalize))
+            input_transform + [transforms.CenterCrop(224)] + normalize))
     val_loader = th.utils.data.DataLoader(
         val_folder,
         batch_size=bsz, shuffle=False,
-        num_workers=nw)
+        num_workers=nw, pin_memory=True)
 
     return train_loader, val_loader, val_loader, train_loader
 

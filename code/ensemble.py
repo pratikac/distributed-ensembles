@@ -65,20 +65,16 @@ pprint(opt)
 
 loaders = []
 if opt['frac'] > 1-1e-12:
-    tr,v,te,trf = getattr(loader, opt['dataset'])(opt)
+    tr,v,_,_ = getattr(loader, opt['dataset'])(opt)
     for i in xrange(opt['n']):
-        loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
+        loaders.append(dict(train=tr,val=v,test=tr,train_full=tr))
 else:
     for i in xrange(opt['n']):
         opt['frac_start'] = (i/float(opt['n'])) % 1
         tr,v,te,trf = getattr(loader, opt['dataset'])(opt)
         loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
 
-if 'threaded' in opt['dataset']:
-    for i in xrange(opt['n']):
-        keys = deepcopy(loaders[i].keys())
-        for k in keys:
-            loaders[i][k+'_iter'] = loaders[i][k].__iter__()
+train_iters = [None]*opt['n']
 
 optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'], llr=lrschedule(opt, opt['e']),
@@ -99,6 +95,9 @@ def train(e):
 
     bsz = opt['b']
     maxb = len(loaders[0]['train'])
+    for i in xrange(n):
+        train_iters[i] = loaders[0]['train'].__iter__()
+
     t0 = timer()
 
     for bi in xrange(maxb):
@@ -111,10 +110,10 @@ def train(e):
                 for i in xrange(n):
                     if 'threaded' in opt['dataset']:
                         try:
-                            x, y = next(loaders[i]['train_iter'])
+                            x, y = next(train_iters[i])
                         except StopIteration:
-                            loaders[i]['train_iter'] = loaders[i]['train'].__iter__()
-                            x, y = next(loaders[i]['train_iter'])
+                            train_iters[i] = loaders[i]['train'].__iter__()
+                            x, y = next(train_iters[i])
                     else:
                         x, y = next(loaders[i]['train'])
 
@@ -128,10 +127,6 @@ def train(e):
                     errs[i] = 100. - acc[0]
                     errs5[i] = 100. - acc[1]
                 model.backward(fs)
-
-                for g in gpus:
-                    with th.cuda.device(g):
-                        th.cuda.synchronize()
 
                 fs = [fs[i].data[0] for i in xrange(n)]
                 return fs, errs, errs5
@@ -215,7 +210,7 @@ def val(e):
 
     valiter = loaders[0]['val']
     if 'threaded' in opt['dataset']:
-        valiter = valiter.__iter__()
+        valiter = loaders[0]['val'].__iter__()
     maxb = len(valiter)
 
     f, top1, top5 = AverageMeter(), AverageMeter(), AverageMeter()
@@ -244,6 +239,8 @@ def val(e):
 
     print((color('red', '**[%2d] %2.4f %2.4f%% %2.4f%%\n'))%(e, f.avg, top1.avg, top5.avg))
     print('')
+
+    del valiter
 
 def save_ensemble(e):
     if not opt['save']:
