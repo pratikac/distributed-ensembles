@@ -23,6 +23,7 @@ opt = add_args([
 ['--gpus', '', 'groups of gpus'],
 ['--frac', 1.0, 'fraction of dataset'],
 ['-b', 128, 'batch_size'],
+['--largebsz', False, 'split computation to use large batch sizes'],
 ['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
 ['--optim', 'DistESGD', 'optim: DistESGD | SGD | ElasticSGD | EntropySGD'],
@@ -73,6 +74,12 @@ else:
         tr,v,te,trf = getattr(loader, opt['dataset'])(opt)
         loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
 
+if 'threaded' in opt['dataset']:
+    for i in xrange(opt['n']):
+        keys = deepcopy(loaders[i].keys())
+        for k in keys:
+            loaders[i][k+'_iter'] = loaders[i][k].__iter__()
+
 optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'], llr=lrschedule(opt, opt['e']),
             g0 = opt['g0'], g1 = opt['g1'], gdot=opt['gdot']/len(loaders[0]['train']),
@@ -83,6 +90,9 @@ def train(e):
     optimizer.config['lr'] = lrschedule(opt, e, logger)
     model.train()
 
+    n = opt['n']
+    ids = deepcopy(model.ids)
+
     f, top1, top5, dt = AverageMeter(), AverageMeter(), AverageMeter(), AverageMeter()
     fstd, top1std, top5std = AverageMeter(), AverageMeter(), AverageMeter()
     pf, ptop1, ptop5 = [],[],[]
@@ -91,18 +101,23 @@ def train(e):
     maxb = len(loaders[0]['train'])
     t0 = timer()
 
-    n = opt['n']
-    ids = deepcopy(model.ids)
-
     for bi in xrange(maxb):
         _dt = timer()
         def helper():
             def feval():
                 xs, ys = [None]*n, [None]*n
-                fs, errs, errs5 = [None]*n, [None]*n, [None]*n
+                fs, errs, errs5 = [0]*n, [0]*n, [0]*n
 
                 for i in xrange(n):
-                    x, y = next(loaders[i]['train'])
+                    if 'threaded' in opt['dataset']:
+                        try:
+                            x, y = next(loaders[i]['train_iter'])
+                        except StopIteration:
+                            loaders[i]['train_iter'] = loaders[i]['train'].__iter__()
+                            x, y = next(loaders[i]['train_iter'])
+                    else:
+                        x, y = next(loaders[i]['train'])
+
                     xs[i], ys[i] =  Variable(x.cuda(ids[i], async=True)), \
                             Variable(y.squeeze().cuda(ids[i], async=True))
 
@@ -168,7 +183,7 @@ def val(e):
     n = opt['n']
     ids = deepcopy(model.ids)
 
-    if opt['frac'] < 1 and False:
+    if opt['frac'] < 1 and False and (not opt['dataset'] == 'imagenet'):
         model.train()
         print((color('red', 'Full train:')))
         for i in xrange(n):
@@ -194,16 +209,18 @@ def val(e):
     val_model = model.ref
     if n == 1:
         val_model = model.w[0]
-    if not opt['dataset'] == 'imagenet':
-        dry_feed(val_model, loaders[0]['train_full'], mid=rid)
+    if (not opt['dataset'] == 'imagenet'):
+        dry_feed(val_model, loaders[0]['train_full_iter'], mid=rid)
     model.eval()
 
-    val_loader = loaders[0]['val']
-    maxb = len(val_loader)
+    valiter = loaders[0]['val']
+    if 'threaded' in opt['dataset']:
+        valiter = valiter.__iter__()
+    maxb = len(valiter)
 
     f, top1, top5 = AverageMeter(), AverageMeter(), AverageMeter()
     for bi in xrange(maxb):
-        x,y = next(val_loader)
+        x,y = next(valiter)
         bsz = x.size(0)
 
         xc,yc = Variable(x.cuda(rid), volatile=True), \

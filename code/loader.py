@@ -101,6 +101,21 @@ def mnist(opt):
         d2.test_labels, train=False)
     return train, val, val, train_full
 
+def mnist_threaded(opt):
+    dt = th.utils.data.DataLoader(
+        datasets.MNIST('/local2/pratikac/mnist', train=True,
+                       transform=transforms.Compose([
+                           transforms.ToTensor()])),
+        batch_size=opt['b'], shuffle=True,
+        num_workers=0, pin_memory=True)
+    dv = th.utils.data.DataLoader(
+        datasets.MNIST('/local2/pratikac/mnist', train=False,
+                       transform=transforms.Compose([
+                           transforms.ToTensor()])),
+        batch_size=opt['b'], shuffle=False,
+        num_workers=0, pin_memory=True)
+    return dt, dv, dv, dt
+
 def cifar10(opt):
     frac = opt.get('frac', 1.0)
     frac_start = opt.get('frac_start', 0.0)
@@ -174,20 +189,7 @@ def svhn(opt):
                      th.from_numpy(dv['labels']).long().squeeze(), train=False)
     return train, val, val, train_full
 
-class ReplacementSampler(object):
-    def __init__(self, data_source, num_samples, replacement=True):
-        self.data_source = data_source
-        self.weights = th.Tensor(len(data_source)).fill_(1)
-        self.num_samples = num_samples
-        self.replacement = replacement
-
-    def __iter__(self):
-        return iter(th.multinomial(self.weights, self.num_samples, self.replacement))
-
-    def __len__(self):
-        return len(self.data_source)
-
-def imagenet(opt, only_train=False):
+def imagenet_threaded(opt, only_train=False):
     loc = '/local2/pratikac/imagenet'
     bsz, nw = opt['b'], 4
 
@@ -201,15 +203,6 @@ def imagenet(opt, only_train=False):
                 transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])]
 
-    if opt['m'].startswith('vgg'):
-        bsz = 64
-        input_transform = [transforms.Scale(384)]
-        normalize = [transforms.Lambda(lambda img: np.array(img) - np.array([123.68, 116.779, 103.939])),
-            transforms.Lambda(lambda img: img[:,:,::-1]),    # RGB -> BGR
-            transforms.Lambda(lambda pic:
-                th.FloatTensor(pic).transpose(0,1).transpose(0,2).contiguous()
-            )
-        ]
 
     train_folder = datasets.ImageFolder(traindir, transforms.Compose([
             transforms.RandomSizedCrop(224),
@@ -217,10 +210,7 @@ def imagenet(opt, only_train=False):
     train_loader = th.utils.data.DataLoader(
         train_folder,
         batch_size=bsz, shuffle=True,
-        num_workers=nw, pin_memory=True, sampler=ReplacementSampler(train_folder,
-                                                    len(train_folder)*max(1,opt['L']),
-                                                    replacement=True)
-        )
+        num_workers=nw, pin_memory=True)
 
     val_folder = datasets.ImageFolder(valdir, transforms.Compose(
             input_transform + [transforms.CenterCrop(224)] + affine + normalize))
@@ -229,7 +219,7 @@ def imagenet(opt, only_train=False):
         batch_size=bsz, shuffle=False,
         num_workers=nw, pin_memory=True)
 
-    return train_loader.__iter__(), val_loader.__iter__(), val_loader.__iter__(), train_loader.__iter__()
+    return train_loader, val_loader, val_loader, train_loader
 
 # PTB
 class Dictionary(object):
