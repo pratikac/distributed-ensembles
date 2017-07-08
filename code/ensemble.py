@@ -23,7 +23,6 @@ opt = add_args([
 ['--gpus', '', 'groups of gpus'],
 ['--frac', 1.0, 'fraction of dataset'],
 ['-b', 128, 'batch_size'],
-['--largebsz', False, 'split computation to use large batch sizes'],
 ['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
 ['--optim', 'DistESGD', 'optim: DistESGD | SGD | ElasticSGD | EntropySGD'],
