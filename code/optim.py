@@ -177,7 +177,7 @@ class DistESGD(object):
         r.copy_(comm.reduce_add(w, rid)).mul_(1/float(n))
 
         e = 1e-12
-        if verbose and state['t'] % 25 == 0:
+        if verbose and state['t'] % 5 == 0:
             for i in xrange(n):
                 debug = dict(
                     dw=dw[i].norm(),
