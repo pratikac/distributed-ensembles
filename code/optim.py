@@ -205,3 +205,92 @@ class EntropySGD(DistESGD):
     def __init__(self, model, config = {}):
         config['eps'] = 1e-4
         super(EntropySGD, self).__init__(model, config)
+
+
+class proxSGD(object):
+    def __init__(self, model, config = {}):
+
+        defaults = dict(lr=0.1, momentum=0.9, dampening=0,
+                weight_decay=0, L=25,
+                g0=0.01, gdot=1e-3,
+                verbose=False,
+                t=0)
+
+        for k in defaults:
+            if config.get(k, None) is None:
+                config[k] = defaults[k]
+
+        self.model = model
+        self.config = config
+        self.state = dict(N=models.num_parameters(self.model.ref),
+                    t=0,
+                    n = len(self.model.w),
+                    ids = deepcopy(self.model.ids))
+
+        assert self.state['n'] == 1, 'prox only works for n=1'
+
+    def step(self, closure=None):
+        assert closure is not None, 'attach closure for DistESGD'
+
+        state = self.state
+        c = self.config
+        model = self.model
+
+        N = state['N']
+        n = state['n']
+        ids = state['ids']
+        rid = model.refid
+
+        lr = c['lr']
+        mom = c['momentum']
+        damp = c['dampening']
+        wd = c['weight_decay']
+        verbose = c['verbose']
+        L = c['L']
+        g0 = c['g0']
+        gdot = c['gdot']
+
+        assert L != 0, 'L is zero'
+
+        if not 'w' in state:
+            t = th.FloatTensor(N)
+
+            for k in ['w', 'dw', 'mdw', 'wc', 'dwc']:
+                state[k] = t.clone().cuda(ids[0])
+            state['r'], state['dr'] = t.clone().cuda(rid), t.clone().cuda(rid)
+
+            flatten_params(model.w[0], state['w'], state['dw'])
+            flatten_params(model.ref, state['r'], state['dr'])
+
+            state['mdw'].zero_()
+
+        state['t'] += 1
+        g = min(g0*(1+gdot)**state['t'], 1)
+
+        w, dw, mdw = state['w'], state['dw'], state['mdw']
+        wc, dwc = state['wc'], state['dwc']
+        r, dr = state['r'], state['dr']
+
+        def feval():
+            dw.zero_()
+            cfs, cerrs, cerrs5 = closure()
+            if wd > 0:
+                dw.add_(wd, w)
+            return cfs, cerrs, cerrs5
+
+        wc.copy_(w)
+
+        fs, errs, errs5 = None, None, None
+        for l in xrange(L):
+            fs, errs, errs5 = feval()
+
+            dw.add_(g0, w-wc)
+
+            mdw.mul_(mom).add_(1-damp, dw)
+            dw.add_(mom, mdw)
+
+            w.add_(-lr, dw)
+
+        r.copy_(w)
+
+        return fs, errs, errs5
