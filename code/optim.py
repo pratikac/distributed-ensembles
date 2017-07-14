@@ -29,9 +29,9 @@ class DistESGD(object):
     def __init__(self, model, config = {}):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0, llr=0.1,
-                weight_decay=0, nesterov=True, L=25, beta1=0.75,
-                g0=0.01, g1=1.0, gdot=0.5, eps=0, clip=None,
-                g0max=1, g1max=10,
+                weight_decay=0, nesterov=True, L=25, beta1=0.0,
+                g0=0.01, g1=0.01, gdot=0.5, eps=0, clip=None,
+                g0max=1, g1max=1,
                 verbose=False,
                 t=0)
 
@@ -58,7 +58,9 @@ class DistESGD(object):
         ids = state['ids']
         rid = model.refid
 
-        lr = c['lr']
+        lr = 1.0
+        llr = c['lr']
+
         mom = c['momentum']
         wd = c['weight_decay']
         damp = c['dampening']
@@ -68,7 +70,6 @@ class DistESGD(object):
         g0 = c['g0']
         g1 = c['g1']
         gdot = c['gdot']
-        llr = c['llr']
         beta1 = c['beta1']
         eps = c['eps']
         clip = c['clip']
@@ -164,7 +165,7 @@ class DistESGD(object):
                 if nesterov:
                     dw[i].add_(mom, mdw[i])
                 else:
-                    dw[i] = mdw[i]
+                    dw[i].copy_(mdw[i])
 
             if clip is not None:
                 if dw[i].norm() > clip:
@@ -257,19 +258,20 @@ class proxSGD(object):
 
             for k in ['w', 'dw', 'mdw', 'wc', 'dwc']:
                 state[k] = t.clone().cuda(ids[0])
-            state['r'], state['dr'] = t.clone().cuda(rid), t.clone().cuda(rid)
+            state['r'], state['dr'], state['mdr'] = t.clone().cuda(rid), t.clone().cuda(rid), t.clone().cuda(rid)
 
             flatten_params(model.w[0], state['w'], state['dw'])
             flatten_params(model.ref, state['r'], state['dr'])
 
             state['mdw'].zero_()
+            state['mdr'].zero_()
 
         state['t'] += 1
         g = min(g0*(1+gdot)**state['t'], 1)
 
         w, dw, mdw = state['w'], state['dw'], state['mdw']
         wc, dwc = state['wc'], state['dwc']
-        r, dr = state['r'], state['dr']
+        r, dr, mdr = state['r'], state['dr'], state['mdr']
 
         def feval():
             dw.zero_()
@@ -279,18 +281,31 @@ class proxSGD(object):
             return cfs, cerrs, cerrs5
 
         wc.copy_(w)
+        dwc.copy_(dw)
 
         fs, errs, errs5 = None, None, None
-        for l in xrange(L):
+        l = 0
+        stop = False
+        while not stop:
             fs, errs, errs5 = feval()
 
-            dw.add_(g0, w-wc)
+            dw.add_(g, w-wc)
 
             mdw.mul_(mom).add_(1-damp, dw)
             dw.add_(mom, mdw)
 
             w.add_(-lr, dw)
 
-        r.copy_(w)
+            t1, t2 = (w-wc + g*dwc).norm(), g*dwc.norm()
+            if l > L:
+                stop = True
+
+            l += 1
+
+        mdr.mul_(mom).add_(1-damp, wc-w)
+        dr.zero_()
+        dr.add_(mom, mdr)
+        r.copy_(wc)
+        r.add_(-1, dr)
 
         return fs, errs, errs5
