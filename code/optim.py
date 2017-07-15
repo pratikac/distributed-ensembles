@@ -138,7 +138,7 @@ class DistESGD(object):
                     if nesterov:
                         dw[i].add_(mom, cmdw[i])
                     else:
-                        dw[i] = cmdw[i]
+                        dw[i].copy_(cmdw[i])
 
                 if clip is not None:
                     if dw[i].norm() > clip:
