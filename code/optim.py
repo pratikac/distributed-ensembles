@@ -153,16 +153,12 @@ class DistESGD(object):
         rc = comm.broadcast(r, ids)
 
         for i in xrange(n):
-        #     if L > 0:
-        #         dw[i].copy_(wc[i]-mw[i])
-        #     else:
-        #         dw[i].copy_(dwc[i])
-
-        #     dw[i].add_(gesgd, wc[i]-rc[i])
             if L > 0:
-                dw[i].copy_(wc[i] - (1-gesgd)*mw[i] - gesgd*(1-gesgd)*rc[i])
+                dw[i].copy_((wc[i]-mw[i])*gsgld)
             else:
-                dw[i].copy_(dwc[i]).add_(gesgd, wc[i]-rc[i])
+                dw[i].copy_(dwc[i])
+
+            dw[i].add_(gesgd, wc[i]-rc[i])
 
             if mom > 0:
                 mdw[i].mul_(mom).add_(1-damp, dw[i])
