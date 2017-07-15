@@ -37,6 +37,7 @@ opt = add_args([
 ['--g1', 1.0, 'elastic gamma'],
 ['--gdot', 0.5, 'gamma dot'],
 ['-s', 42, 'seed'],
+['--nw', 0, 'workers'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
 ['-v', False, 'verbose'],
@@ -57,7 +58,7 @@ model = models.ReplicateModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
-                            'f','v', 'augment', 't',
+                            'f','v', 'augment', 't', 'nw',
                             'save','e','l2','r', 'lr'])
 logger = create_logger(opt)
 pprint(opt)

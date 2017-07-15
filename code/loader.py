@@ -1,6 +1,7 @@
 import torch as th
 import torchvision.cvtransforms as T
-from torchvision import datasets, transforms
+import torchvision.transforms as transforms
+from torchvision import datasets
 import torchnet as tnt
 import torch.utils.data
 import torchnet as tnt
@@ -12,23 +13,24 @@ import scipy.io as sio
 
 
 def get_iterator(d, transforms, bsz, nw=0, shuffle=True):
-    return tnt.dataset.TransformDataset(tnt.dataset.TensorDataset([d['x'],d['y']]),
-            transforms).parallel(batch_size=bsz,
+    ds = tnt.dataset.TensorDataset([d['x'], d['y']])
+    ds = ds.transform({0:transforms})
+    return ds.parallel(batch_size=bsz,
             num_workers=nw, shuffle=shuffle, pin_memory=True)
 
-def permute_data(d):
+def shuffle_data(d):
     x, y = d['x'], d['y']
     n = x.size(0)
     idx = th.randperm(n)
     d['x'] = th.index_select(x, 0, idx)
     d['y'] = th.index_select(y, 0, idx)
 
-def get_loaders(d, transforms, opt, nw=0):
+def get_loaders(d, transforms, opt):
     if not opt['augment']:
         transforms = lambda x: x
 
-    trf = get_iterator(d['train'], transforms, opt['b'], nw=nw, shuffle=True)
-    tv = get_iterator(d['val'], lambda x:x, opt['b'], nw=nw, shuffle=False)
+    trf = get_iterator(d['train'], transforms, opt['b'], nw=opt['nw'], shuffle=True)
+    tv = get_iterator(d['val'], lambda x:x, opt['b'], nw=opt['nw'], shuffle=False)
     if opt['frac'] > 1-1e-12:
         return [dict(train=trf,val=tv,test=tv,train_full=trf) for i in xrange(opt['n'])]
     else:
@@ -44,7 +46,7 @@ def get_loaders(d, transforms, opt, nw=0):
                 ne = ne % n
                 xy = {  'x': th.cat((x[ns:], x[:ne])),
                         'y': th.cat((y[ns:], y[:ne]))}
-            tr.append(get_iterator(xy, transforms, opt['b'], nw=nw, shuffle=True))
+            tr.append(get_iterator(xy, transforms, opt['b'], nw=opt['nw'], shuffle=True))
         return [dict(train=tr[i],val=tv,test=tv,train_full=trf) for i in xrange(opt['n'])]
 
 def mnist(opt):
@@ -54,7 +56,7 @@ def mnist(opt):
     d = {'train': {'x': d1.train_data.view(-1,1,28,28).float(), 'y': d1.train_labels},
         'val': {'x': d2.test_data.view(-1,1,28,28).float(), 'y': d2.test_labels}}
 
-    permute_data(d['train'])
+    shuffle_data(d['train'])
     return d, lambda x: x
 
 def cifar10(opt):
@@ -68,9 +70,19 @@ def cifar10(opt):
 
     d = {'train': {'x': th.from_numpy(d1['data']), 'y': th.from_numpy(d1['labels'])},
         'val': {'x': th.from_numpy(d2['data']), 'y': th.from_numpy(d2['labels'])}}
-    permute_data(d['train'])
+    shuffle_data(d['train'])
 
-    return d
+    sz = d['train']['x'].size(3)
+    augment = tnt.transform.compose([
+        lambda x: x.numpy().astype(np.float32),
+        lambda x: x.transpose(1,2,0),
+        T.RandomHorizontalFlip(),
+        T.Pad(4, cv2.BORDER_REFLECT),
+        T.RandomCrop(sz),
+        lambda x: x.transpose(2,0,1),
+        th.from_numpy])
+
+    return d, augment
 
 def cifar100(opt):
     loc = '/local2/pratikac/cifar/'
@@ -83,41 +95,55 @@ def cifar100(opt):
 
     d = {'train': {'x': th.from_numpy(d1['data']), 'y': th.from_numpy(d1['labels'])},
         'val': {'x': th.from_numpy(d2['data']), 'y': th.from_numpy(d2['labels'])}}
-    permute_data(d['train'])
-    return d
+    shuffle_data(d['train'])
 
-# def svhn(opt):
-#     frac = opt.get('frac', 1.0)
-#     frac_start = opt.get('frac_start', 0.0)
-#     loc = '/local2/pratikac/svhn'
+    sz = d['train']['x'].size(3)
+    augment = tnt.transform.compose([
+        lambda x: x.numpy().astype(np.float32),
+        lambda x: x.transpose(1,2,0),
+        T.RandomHorizontalFlip(),
+        T.Pad(4, cv2.BORDER_REFLECT),
+        T.RandomCrop(sz),
+        lambda x: x.transpose(2,0,1),
+        th.from_numpy])
 
-#     d1 = sio.loadmat(os.path.join(loc, 'train_32x32.mat'))
-#     d2 = sio.loadmat(os.path.join(loc, 'extra_32x32.mat'))
-#     d3 = sio.loadmat(os.path.join(loc, 'test_32x32.mat'))
+    return d, lambda x: x
 
-#     dt = {  'data': np.concatenate([d1['X'], d2['X']], axis=3),
-#             'labels': np.concatenate([d1['y'], d2['y']])-1}
-#     dv = {  'data': d3['X'],
-#             'labels': d3['y']-1}
-#     dt['data'] = np.array(dt['data'], dtype=np.float32)
-#     dv['data'] = np.array(dv['data'], dtype=np.float32)
+def svhn(opt):
+    loc = '/local2/pratikac/svhn/'
 
-#     dt['data'] = np.transpose(dt['data'], (3,2,0,1))
-#     dv['data'] = np.transpose(dv['data'], (3,2,0,1))
+    d1 = sio.loadmat(loc + 'train_32x32.mat')
+    d2 = sio.loadmat(loc + 'extra_32x32.mat')
+    d3 = sio.loadmat(loc + 'test_32x32.mat')
 
-#     mean = np.array([109.9, 109.7, 113.8])[None,:,None,None]
-#     std = np.array([50.1, 50.6, 50.9])[None,:,None,None]
-#     dt['data'] = (dt['data'] - mean)/std
-#     dv['data'] = (dv['data'] - mean)/std
+    d = {'train': { 'x': np.concatenate([d1['X'],d2['X']], axis=3).astype(np.float32),
+                    'y': np.concatenate([d1['y'],d2['y']])-1},
+        'val': {'x': d3['X'].astype(np.float32),
+                'y': d3['y']-1}}
 
-#     train = sampler_t(opt['b'], th.from_numpy(dt['data']).float(),
-#                     th.from_numpy(dt['labels']).long().squeeze(), augment=opt['augment'],
-#                     frac=frac, frac_start=frac_start)
-#     train_full = sampler_t(opt['b'], th.from_numpy(dt['data']).float(),
-#                     th.from_numpy(dt['labels']).long().squeeze(), frac=1.0, train=False)
-#     val = sampler_t(opt['b'], th.from_numpy(dv['data']).float(),
-#                      th.from_numpy(dv['labels']).long().squeeze(), train=False)
-#     return train, val, val, train_full
+    mean = np.array([109.9, 109.7, 113.8])[None,:,None,None]
+    std = np.array([50.1, 50.6, 50.9])[None,:,None,None]
+
+    for k in d:
+        d[k]['x'] = np.transpose(d[k]['x'], (3,2,0,1))
+        d[k]['x'] = (d[k]['x'] - mean)/std
+
+        d[k]['x'] = th.from_numpy(d[k]['x'])
+        d[k]['y'] = th.from_numpy(d[k]['y'])
+
+    shuffle_data(d['train'])
+
+    sz = d['train']['x'].size(3)
+    augment = tnt.transform.compose([
+        lambda x: x.numpy().astype(np.float32),
+        lambda x: x.transpose(1,2,0),
+        T.RandomHorizontalFlip(),
+        T.Pad(4, cv2.BORDER_REFLECT),
+        T.RandomCrop(sz),
+        lambda x: x.transpose(2,0,1),
+        th.from_numpy])
+
+    return d, lambda x: x
 
 def imagenet(opt, only_train=False):
     loc = '/local2/pratikac/imagenet'

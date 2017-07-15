@@ -9,7 +9,7 @@ bsz = 1024
 L = 1
 n = 3
 
-opt = dict(b=bsz, frac=0.5, n=n, m='mnist', augment=True)
+opt = dict(b=bsz, frac=0.5, n=n, m='cifar10', augment=True, nw=4)
 d, augment = getattr(loader, opt['m'])(opt)
 loaders = loader.get_loaders(d, augment, opt)
 ds = loaders[0]['train']
