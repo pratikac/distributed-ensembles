@@ -1,30 +1,18 @@
 import argparse, math, random
 import torch as th
-import torch.nn as nn
-from torch.autograd import Variable
-from torchvision import datasets, transforms
 
-import models, loader, optim
+import loader
 import numpy as np
-from pprint import pprint
 import pdb, glob, sys, os
 
 bsz = 1024
 L = 1
 n = 3
 
-ds = th.utils.data.DataLoader(
-    datasets.MNIST('/local2/pratikac/mnist', train=True,
-                   transform=transforms.Compose([
-                       transforms.ToTensor()])),
-    batch_size=bsz, shuffle=True,
-    num_workers=0, pin_memory=True)
-
-# option 0
-# for e in xrange(10):
-#     for bi, (x,y) in enumerate(ds):
-#         print e, bi
-
+opt = dict(b=bsz, frac=0.5, n=n, m='mnist', augment=True)
+d, augment = getattr(loader, opt['m'])(opt)
+loaders = loader.get_loaders(d, augment, opt)
+ds = loaders[0]['train']
 
 # option 1
 dsiter = ds.__iter__()

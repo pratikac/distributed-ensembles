@@ -62,16 +62,7 @@ build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
 logger = create_logger(opt)
 pprint(opt)
 
-loaders = []
-if opt['frac'] > 1-1e-12:
-    tr,v,_,_ = getattr(loader, opt['dataset'])(opt)
-    for i in xrange(opt['n']):
-        loaders.append(dict(train=tr,val=v,test=tr,train_full=tr))
-else:
-    for i in xrange(opt['n']):
-        opt['frac_start'] = (i/float(opt['n'])) % 1
-        tr,v,te,trf = getattr(loader, opt['dataset'])(opt)
-        loaders.append(dict(train=tr,val=v,test=te,train_full=trf))
+loaders = loader.get_loaders(getattr(loader, opt['dataset'])(opt), opt, nw=0)
 
 train_iters = [None]*opt['n']
 
