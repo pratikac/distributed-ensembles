@@ -29,9 +29,9 @@ class DistESGD(object):
     def __init__(self, model, config = {}):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0, llr=0.1,
-                weight_decay=0, nesterov=True, L=25, beta1=0.0,
-                g0=0.01, g1=0.01, gdot=0.5, eps=0, clip=None,
-                g0max=1, g1max=1,
+                weight_decay=0, nesterov=True, L=25, beta1=0.75,
+                g0=0.01, g1=1.0, gdot=0.5, eps=0, clip=None,
+                g0max=1, g1max=10,
                 verbose=False,
                 t=0)
 
@@ -58,8 +58,8 @@ class DistESGD(object):
         ids = state['ids']
         rid = model.refid
 
-        lr = 1.0
-        llr = c['lr']
+        lr = c['lr']
+        llr = c['llr']
 
         mom = c['momentum']
         wd = c['weight_decay']
