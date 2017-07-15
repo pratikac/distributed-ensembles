@@ -16,7 +16,7 @@ ds = loaders[0]['train']
 
 # option 1
 dsiter = ds.__iter__()
-for e in xrange(10):
+for e in xrange(1000):
     maxb = len(ds)
     print 'maxb: ', maxb
     for bi in xrange(maxb):

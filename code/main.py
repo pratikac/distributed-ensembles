@@ -2,293 +2,222 @@ from __future__ import print_function
 import argparse, math, random
 import torch as th
 import torch.nn as nn
+import torchnet as tnt
+
 from torch.autograd import Variable
-from timeit import default_timer as timer
-import torch.backends.cudnn as cudnn
-import torch.nn.functional as F
 
 from exptutils import *
 import models, loader, optim
+from timeit import default_timer as timer
+
 import numpy as np
 import logging
 from pprint import pprint
 import pdb, glob, sys
-from collections import OrderedDict
 from copy import deepcopy
 
 opt = add_args([
 ['-o', '/local2/pratikac/results', 'output'],
-['-m', 'lenet', 'lenet | mnistfc | allcnn | wideresnet'],
-['--optim', 'SGD', 'ESGD | SGD'],
-['--dataset', 'mnist', 'mnist | rotmnist | cifar10 | cifar100'],
+['-m', 'lenet', 'lenet | mnistfc | allcnn | wrn* | resnet*'],
+['--dataset', 'mnist', 'mnist | cifar10 | cifar100 | svhn | imagenet'],
+['-g', 3, 'gpu idx'],
+['--gpus', '', 'groups of gpus'],
 ['--frac', 1.0, 'fraction of dataset'],
 ['-b', 128, 'batch_size'],
 ['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
-['-B', 100, 'Max epochs'],
-['--depth', 28, 'wrn depth'],
-['--widen', 10, 'wrn widen'],
+['--optim', 'Parle', 'Parle | SGD | EntropySGD | ProxSGD'],
+['-d', -1., 'dropout'],
+['--l2', -1., 'ell-2'],
+['-B', 100, 'max epochs'],
 ['--lr', 0.1, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
-['--l2', -1.0, 'ell-2'],
-['-d', -1.0, 'dropout'],
-['-L', 0, 'sgld iterations'],
-['--eps', 1e-4, 'sgld noise'],
-['--g0', 1e-4, 'gamma'],
-['--g1', 1e-3, 'scoping'],
+['-n', 1, 'num replicas'],
+['-L', 25, 'sgld iterations'],
+['--g0', 0.01, 'SGLD gamma'],
+['--g1', 1.0, 'elastic gamma'],
+['--gdot', 0.5, 'gamma dot'],
 ['-s', 42, 'seed'],
-['-g', 2, 'gpu idx'],
+['--nw', 4, 'workers'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
 ['-v', False, 'verbose'],
-['--retrain', '', 'checkpoint'],
-['--validate', '', 'validate a checkpoint'],
-['--validate_ensemble', '', 'validate an ensemble'],
-['--ensemble_mean', '', 'mean of ensemble'],
-['--ensemble_std', '', 'std of ensemble'],
-['--save', False, 'save network']
+['-r', '', 'resume ckpt'],
+['--save', False, 'save ckpt'],
 ])
-if opt['L'] > 0:
+
+if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
-if opt['l']:
-    opt['f'] = 1
 
-th.set_num_threads(2)
-if opt['g'] in [0, 1, 2]:
-    th.cuda.set_device(opt['g'])
-random.seed(opt['s'])
-np.random.seed(opt['s'])
-th.manual_seed(opt['s'])
-th.cuda.manual_seed_all(opt['s'])
-cudnn.benchmark = True
+ngpus = th.cuda.device_count()
+gpus = [i if opt['g'] >= ngpus else opt['g'] for i in xrange(ngpus)]
+if not opt['gpus'] == '':
+    gpus = json.loads(opt['gpus'])
+setup(t=4, s=opt['s'], gpus=gpus)
 
-model = getattr(models, opt['m'])(opt)
-train_loader, val_loader, test_loader,_ = getattr(loader, opt['dataset'])(opt)
-if opt['g'] > 2:
-    model = th.nn.DataParallel(model)
-model = model.cuda()
-criterion = nn.CrossEntropyLoss().cuda()
-optimizer = getattr(optim, opt['optim'])(model,
-        config = dict(lr=opt['lr'], momentum=0.9, nesterov=False, weight_decay=opt['l2'],
-        L=opt['L'], eps=opt['eps'], g0=opt['g0'], g1=opt['g1'], verbose=opt['v']))
+model = models.ReplicateModel(opt, gpus=gpus)
+criterion = nn.CrossEntropyLoss()
 
-ckpt = None
-if not opt['retrain'] == '':
-    ckpt = th.load(opt['retrain'])
-if not opt['validate'] == '':
-    ckpt = th.load(opt['validate'])
-
-if ckpt is not None:
-    model.load_state_dict(ckpt['state_dict'])
-    print('Loading model: %s'%ckpt['name'])
-
-build_filename(opt, blacklist=['lrs','retrain','step', \
-                            'ratio','f','v','dataset', 'augment', 'd',
-                            'depth', 'widen','save','e','validate','l2','eps',
-                            'ensemble_mean','ensemble_std','validate_ensemble'])
+build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
+                            'f','v', 'augment', 't', 'nw',
+                            'save','e','l2','r', 'lr'])
 logger = create_logger(opt)
 pprint(opt)
 
-def schedule(e):
-    if opt['lrs'] == '':
-        opt['lrs'] = json.dumps([[opt['B'], opt['lr']]])
+dataset, augment = getattr(loader, opt['dataset'])(opt)
+loaders = loader.get_loaders(dataset, augment, opt)
 
-    lrs = json.loads(opt['lrs'])
+params = dict(t=0, gdot=opt['gdot']/len(loaders[0]['train']))
+opt.update(**params)
+optimizer = getattr(optim, opt['optim'])(model, config=opt)
 
-    idx = len(lrs)-1
-    for i in xrange(len(lrs)):
-        if e < lrs[i][0]:
-            idx = i
-            break
-    lr = lrs[idx][1]
-
-    print('[LR]: ', lr)
-    if opt['l']:
-        logger.info('[LR] ' + json.dumps({'lr': lr}))
-    optimizer.config['lr'] = lr
+AverageMeter = tnt.meter.AverageValueMeter
 
 def train(e):
-    schedule(e)
-    loader = train_loader.__iter__()
-
+    optimizer.config['lr'] = lrschedule(opt, e, logger)
     model.train()
 
-    fs, top1, dt = AverageMeter(), AverageMeter(), AverageMeter()
-    ts = timer()
+    n = opt['n']
+    ids = deepcopy(model.ids)
+
+    loss, top1, top5, dt = AverageMeter(), AverageMeter(), \
+            AverageMeter(), AverageMeter()
 
     bsz = opt['b']
-    maxb = len(loader)
+    maxb = len(loaders[0]['train'])
+    iters = [None]*n
+    for i in xrange(n):
+        iters[i] = loaders[i]['train'].__iter__()
 
     for bi in xrange(maxb):
+        _dt = timer()
         def helper():
-            def feval(bprop=True):
-                x,y = next(loader)
-                x, y = Variable(x.cuda(async=True)), Variable(y.squeeze().cuda(async=True))
-                bsz = x.size(0)
+            def feval():
+                xs, ys = [None]*n, [None]*n
+                fs, errs, errs5 = [0]*n, [0]*n, [0]*n
 
-                model.zero_grad()
-                yh = model(x)
-                f = criterion.forward(yh, y)
+                for i in xrange(n):
+                    try:
+                        x, y = next(iters[i])
+                    except StopIteration:
+                        iters[i] = loaders[i]['train'].__iter__()
+                        x, y = next(iters[i])
+                    xs[i], ys[i] =  Variable(x.cuda(ids[i])), Variable(y.squeeze().cuda(ids[i]))
 
-                if bprop:
-                    f.backward()
+                yhs = model(xs, ys)
+                for i in xrange(n):
+                    fs[i] = criterion.cuda(ids[i])(yhs[i], ys[i])
+                    errs[i], errs5[i] = clerr(yhs[i].data, ys[i].data, topk=(1,5))
+                model.backward(fs)
 
-                err = 100. - accuracy(yh.data, y.data, topk=(1,))
-                return (f.data[0], err)
+                fs = [fs[i].data[0] for i in xrange(n)]
+                return fs, errs, errs5
             return feval
 
-        f, err = optimizer.step(helper())
-        th.cuda.synchronize()
+        fs, errs, errs5 = optimizer.step(helper())
+        f, err, err5 = np.mean(fs), np.mean(errs), np.mean(errs5)
+        _dt = timer() - _dt
 
-        fs.update(f, bsz)
-        top1.update(err, bsz)
-        dt.update(timer()-ts, 1)
+        loss.add(f)
+        top1.add(err)
+        top5.add(err5)
+        dt.add(_dt)
 
-        if opt['l']:
-            s = dict(i=bi + e*maxb, e=e, f=f, top1=err)
+        lm, t1m, t5m = loss.value()[0], top1.value()[0], top5.value()[0]
+        if opt['l'] and bi % 25 ==0 and bi > 0:
+            s = dict(i=bi + e*maxb, e=e, f=lm, top1=t1m, top5=t5m, dt=_dt)
             logger.info('[LOG] ' + json.dumps(s))
 
-        bif = dt.avg > 1 and 5 or 25
-        if bi % bif == 0 and bi != 0:
-            print((color('blue', '[%2d][%4d/%4d] %2.4f %2.2f%%'))%(e,bi,maxb,
-                fs.avg, top1.avg))
+        bif = int(5/dt.value()[0])+1
+        if bi % bif == 0 and bi > 0:
+            print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f %2.2f%% %2.2f%%'))%(_dt,
+                e,bi,maxb, lm, t1m, t5m))
 
     if opt['l']:
-        s = dict(e=e, i=0, f=fs.avg, top1=top1.avg, train=True, t=timer()-ts)
+        s = dict(e=e, i=0, f=lm, top1=t1m, top5=t5m, train=True, t=dt.sum)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
-    print(  (color('blue', '++[%2d] %2.4f %2.2f%% [%.2fs]'))% (e,
-            fs.avg, top1.avg, timer()-ts))
+    print((color('blue', '++[%2d] %2.4f %2.2f%% %2.2f%% [%2.2fs]'))% (e, lm, t1m, t5m, dt.sum))
+    print()
 
-def set_dropout(cache = None, p=0):
-    if cache is None:
-        cache = []
-        for l in model.modules():
-            if 'Dropout' in str(type(l)):
-                cache.append(l.p)
-                l.p = p
-        return cache
-    else:
-        for l in model.modules():
-            if 'Dropout' in str(type(l)):
-                assert len(cache) > 0, 'cache is empty'
-                l.p = cache.pop(0)
+def val(e):
+    n = opt['n']
+    ids = deepcopy(model.ids)
 
-def dry_feed(model):
-    model.train()
-    cache = set_dropout()
-    maxb = len(train_loader)
-    for bi in xrange(maxb):
-        x,y = next(train_loader)
-        x,y =   Variable(x.cuda(async=True), volatile=True), \
-                Variable(y.squeeze().cuda(async=True), volatile=True)
-        yh = model(x)
-    set_dropout(cache)
+    rid = model.refid
+    val_model = model.w[0] if n == 1 else model.ref
 
-def val(e, data_loader):
-    dry_feed(model)
+    if (not 'imagenet' in opt['dataset']):
+        dry_feed(val_model, loaders[0]['train_full'], mid=rid)
+
     model.eval()
 
-    maxb = len(data_loader)
-    fs, top1 = AverageMeter(), AverageMeter()
-    for bi in xrange(maxb):
-        x,y = next(data_loader)
+    loss, top1, top5 = AverageMeter(), AverageMeter(), AverageMeter()
+
+    for bi, (x,y) in enumerate(loaders[0]['val']):
         bsz = x.size(0)
 
-        x,y =   Variable(x.cuda(async=True), volatile=True), \
-                Variable(y.squeeze().cuda(async=True), volatile=True)
-        yh = model(x)
+        xc,yc = Variable(x.cuda(rid), volatile=True), \
+                Variable(y.squeeze().cuda(rid), volatile=True)
 
-        f = criterion.forward(yh, y).data[0]
-        err = 100. - accuracy(yh.data, y.data, topk=(1,))
+        yh = val_model(xc)
+        f = criterion.cuda(rid)(yh, yc).data[0]
+        err, err5 = clerr(yh.data, yc.data, topk=(1,5))
+        loss.add(f)
+        top1.add(err)
+        top5.add(err5)
 
-        fs.update(f, bsz)
-        top1.update(err, bsz)
+        if bi % 100 == 0 and bi > 0:
+            print((color('red', '*[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, bi, \
+                    loss.value()[0], top1.value()[0], top5.value()[0]))
 
     if opt['l']:
-        s = dict(e=e, i=0, f=fs.avg, top1=top1.avg, val=True)
+        s = dict(e=e, i=0, f=loss.value()[0], top1=top1.value()[0], top5=top5.value()[0], val=True)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
-    print((color('red', '**[%2d] %2.4f %2.4f%%\n'))%(e, fs.avg, top1.avg))
+    print((color('red', '**[%2d] %2.4f %2.4f%% %2.4f%%\n'))%(e, loss.value()[0], top1.value()[0], top5.value()[0]))
     print('')
 
+def save_ensemble(e):
+    if not opt['save']:
+        return
 
-def validate_ensemble(ensemble, data_loader):
-    for m in ensemble:
-        dry_feed(m)
-        m.eval()
+    loc = opt.get('o','/local2/pratikac/results')
+    dirloc = os.path.join(loc, opt['m'], opt['filename'])
+    if not os.path.isdir(dirloc):
+        os.makedirs(dirloc)
 
-    maxb = len(data_loader)
-    fs, top1 = AverageMeter(), AverageMeter()
-    for bi in xrange(maxb):
-        x,y = next(data_loader)
-        bsz = x.size(0)
+    r = gitrev(opt)
+    meta = dict(SHA=r[0], STATUS=r[1], DIFF=r[2])
+    th.save(dict(
+            meta = meta,
+            opt=json.dumps(opt),
+            ref=model.ref.state_dict(),
+            w = [model.w[i].state_dict() for i in xrange(opt['n'])],
+            e=e,
+            t=optimizer.state['t']),
+            os.path.join(dirloc, str(e) + '.pz'))
 
-        x,y =   Variable(x.cuda(), volatile=True), \
-                Variable(y.squeeze().cuda(), volatile=True)
+if not opt['r'] == '':
+    print('Loading model from: ', opt['r'])
+    d = th.load(opt['r'])
+    model.ref.load_state_dict(d['ref'])
+    model.ref = model.ref.cuda(model.refid)
+    for i in xrange(opt['n']):
+        model.w[i].load_state_dict(d['w'][i])
+        model.w[i] = model.w[i].cuda(model.ids[i])
+    print('[Loaded model, check validation error]')
+    val(d['e'])
 
-        yh = F.softmax(ensemble[0](x))
-        for m in ensemble[1:]:
-            yh += F.softmax(m(x))
-        yh = yh/float(len(ensemble))
+    opt['e'] = d['e'] + 1
 
-        #f = criterion.forward(yh, y).data[0]
-        f = 0
-        err = 100 - accuracy(yh.data, y.data, topk=(1,))
+    print('[Loading new optimizer]')
+    params = dict(t=d['t'], gdot=opt['gdot']/len(loaders[0]['train']))
+    optimizer = getattr(optim, opt['optim'])(model, config = opt.update(**params))
 
-        fs.update(f, bsz)
-        top1.update(err, bsz)
-
-    print((color('red', 'Ensemble pred: ** %2.4f %2.4f%%\n'))%(fs.avg, top1.avg))
-    print('')
-
-if opt['ensemble_mean'] != '' and opt['ensemble_std'] != '':
-    mu = OrderedDict(json.load(open(opt['ensemble_mean'], 'rb')))
-    std = OrderedDict(json.load(open(opt['ensemble_std'], 'rb')))
-    for k in mu:
-        mu[k] = np.array(mu[k], dtype=np.float32)
-    for k in std:
-        std[k] = np.array(std[k], dtype=np.float32)
-
-    for i in xrange(10):
-        d = deepcopy(mu)
-        for k in d:
-            d[k] = th.from_numpy(d[k] + 0.5*std[k]*np.random.randn(*std[k].shape))
-
-        model.load_state_dict(d)
-        model = model.cuda()
-        print('Created model %d'%i)
-        print('Train')
-        val(0, train_loader)
-        print('Val')
-        val(0, test_loader)
-
-if opt['validate_ensemble'] != '':
-    ensemble = []
-    for f in sorted(glob.glob(opt['validate_ensemble'] + '*.pz')):
-        m = deepcopy(model)
-        print('Loading ' + f)
-        d = th.load(f)
-        m.load_state_dict(d['state_dict'])
-        m = m.cuda()
-        ensemble.append(m)
-
-    #print('Train')
-    #validate_ensemble(ensemble, train_loader)
-    print('Val')
-    validate_ensemble(ensemble, val_loader)
-
-if opt['validate'] == '':
-    for e in xrange(opt['e'], opt['B']):
-        train(e)
-        if e % opt['f'] == opt['f'] -1:
-            val(e, val_loader)
-        if opt['save']:
-            save(model, opt, marker='s_%s'%opt['s'])
-else:
-    e = 0
-    val(e, test_loader)
-    print('Training error')
-    val(e, train_loader)
+for e in xrange(opt['e'], opt['B']):
+    train(e)
+    val(e)
+    save_ensemble(e)

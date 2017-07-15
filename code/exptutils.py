@@ -112,25 +112,7 @@ def save(model, opt, marker=''):
             'name': model.name}
     th.save(o, fn)
 
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
 def accuracy(output, target, topk=(1,)):
-    """Computes the precision@k for the specified values of k"""
     maxk = max(topk)
     batch_size = target.size(0)
 
@@ -146,15 +128,13 @@ def accuracy(output, target, topk=(1,)):
         return res[0]
     return res
 
+def clerr(output, target, topk=(1,)):
+    return [100.0 - a for a in accuracy(output, target, topk)]
+
 def setup(t=4, s=42, gpus=[0,1,2]):
     th.set_num_threads(t)
     np.random.seed(s)
     th.manual_seed(s)
-    # if len(np.unique(gpus)) == 1:
-    #     th.cuda.set_device(gpus[0])
-    #     # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-    #     # os.environ["CUDA_VISIBLE_DEVICES"]=str(gpus[0])
-    #     th.cuda.manual_seed(s)
     th.cuda.manual_seed(s)
     th.cuda.manual_seed_all(s)
     th.randn(8)
@@ -177,13 +157,8 @@ def dry_feed(m, loader, mid=0, opt=None):
 
     m.train()
     cache = set_dropout()
-    maxb = len(loader)
-    # if opt and opt['dataset'] == 'imagenet':
-    #     maxb = 1000
-    for bi in xrange(maxb):
-        x,y = next(loader)
-        x,y =   Variable(x.cuda(mid), volatile=True), \
-                Variable(y.squeeze().cuda(mid), volatile=True)
+    for bi, (x,y) in enumerate(loader):
+        x =   Variable(x.cuda(mid), volatile=True)
         yh = m(x)
     set_dropout(cache)
     m.eval()

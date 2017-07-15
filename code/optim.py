@@ -29,7 +29,7 @@ class DistESGD(object):
     def __init__(self, model, config = {}):
 
         defaults = dict(lr=0.1, momentum=0.9, dampening=0, llr=0.1,
-                weight_decay=0, nesterov=True, L=25, beta1=0.75,
+                l2=0, nesterov=True, L=25, beta1=0.75,
                 g0=0.01, g1=1.0, gdot=0.5, eps=0, clip=None,
                 g0max=1, g1max=10,
                 verbose=False,
@@ -62,7 +62,7 @@ class DistESGD(object):
         llr = c['llr']
 
         mom = c['momentum']
-        wd = c['weight_decay']
+        wd = c['l2']
         damp = c['dampening']
         nesterov = c['nesterov']
         verbose = c['verbose']
@@ -207,22 +207,18 @@ class EntropySGD(DistESGD):
         config['eps'] = 1e-4
         super(EntropySGD, self).__init__(model, config)
 
-
-class proxSGD(object):
+class ProxSGD(object):
     def __init__(self, model, config = {}):
 
-        defaults = dict(lr=0.1, momentum=0.9, dampening=0,
-                weight_decay=0, L=25,
+        defaults = dict(lr=0.1, mom=0.9, damp=0,
+                l2=0, L=25,
                 g0=0.01, gdot=1e-3,
                 verbose=False,
                 t=0)
-
-        for k in defaults:
-            if config.get(k, None) is None:
-                config[k] = defaults[k]
+        defaults.update(**config)
 
         self.model = model
-        self.config = config
+        self.config = deepcopy(defaults)
         self.state = dict(N=models.num_parameters(self.model.ref),
                     t=0,
                     n = len(self.model.w),
@@ -231,7 +227,7 @@ class proxSGD(object):
         assert self.state['n'] == 1, 'prox only works for n=1'
 
     def step(self, closure=None):
-        assert closure is not None, 'attach closure for DistESGD'
+        assert closure is not None, 'attach closure for ProxSGD'
 
         state = self.state
         c = self.config
@@ -242,16 +238,7 @@ class proxSGD(object):
         ids = state['ids']
         rid = model.refid
 
-        lr = c['lr']
-        mom = c['momentum']
-        damp = c['dampening']
-        wd = c['weight_decay']
-        verbose = c['verbose']
-        L = c['L']
-        g0 = c['g0']
-        gdot = c['gdot']
-
-        assert L != 0, 'L is zero'
+        assert c['L'] != 0, 'L is zero'
 
         if not 'w' in state:
             t = th.FloatTensor(N)
@@ -268,7 +255,7 @@ class proxSGD(object):
             state['mdr'].zero_()
 
         state['t'] += 1
-        g = min(g0*(1+gdot)**state['t'], 1)
+        g = min(c['g0']*(1+c['gdot'])**state['t'], 1)
 
         w, dw, mdw = state['w'], state['dw'], state['mdw']
         wc, dwc = state['wc'], state['dwc']
@@ -277,8 +264,8 @@ class proxSGD(object):
         def feval():
             dw.zero_()
             cfs, cerrs, cerrs5 = closure()
-            if wd > 0:
-                dw.add_(wd, w)
+            if c['l2'] > 0:
+                dw.add_(c['l2'], w)
             return cfs, cerrs, cerrs5
 
         wc.copy_(w)
@@ -292,17 +279,17 @@ class proxSGD(object):
 
             dw.add_(g, w-wc)
 
-            mdw.mul_(mom).add_(1-damp, dw)
-            dw.add_(mom, mdw)
-            w.add_(-lr, dw)
+            mdw.mul_(c['mom']).add_(1-c['damp'], dw)
+            dw.add_(c['mom'], mdw)
+            w.add_(-c['lr'], dw)
 
-            if l > L:
+            if l > c['L']:
                 stop = True
             l += 1
 
-        mdr.mul_(mom).add_(1-damp, wc-w)
+        mdr.mul_(c['mom']).add_(1-c['damp'], wc-w)
         dr.zero_()
-        dr.add_(mom, mdr)
+        dr.add_(c['mom'], mdr)
         r.copy_(wc)
         r.add_(-1, dr)
 

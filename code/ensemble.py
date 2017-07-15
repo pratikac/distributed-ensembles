@@ -63,9 +63,8 @@ build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
 logger = create_logger(opt)
 pprint(opt)
 
-loaders = loader.get_loaders(getattr(loader, opt['dataset'])(opt), opt, nw=0)
-
-train_iters = [None]*opt['n']
+dataset, augment = getattr(loader, opt['dataset'])(opt)
+loaders = loader.get_loaders(dataset, augment, opt)
 
 optimizer = getattr(optim, opt['optim'])(model, config =
         dict(lr=opt['lr'], weight_decay=opt['l2'], L=opt['L'], llr=lrschedule(opt, opt['e']),
