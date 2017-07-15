@@ -25,29 +25,26 @@ def flatten_params(m, fw, fdw):
 
         idx += w.data.numel()
 
-class DistESGD(object):
+class Parle(object):
     def __init__(self, model, config = {}):
 
-        defaults = dict(lr=0.1, momentum=0.9, dampening=0, llr=0.1,
-                l2=0, nesterov=True, L=25, beta1=0.75,
-                g0=0.01, g1=1.0, gdot=0.5, eps=0, clip=None,
-                g0max=1, g1max=10,
+        defaults = dict(lr=0.1, mom=0.9, damp=0, llr=0.1,
+                l2=0, L=25, beta1=0.75,
+                g0=0.01, g1=1.0, gdot=0.5,
+                g0m=1, g1m=10,
                 verbose=False,
                 t=0)
-
-        for k in defaults:
-            if config.get(k, None) is None:
-                config[k] = defaults[k]
+        defaults.update(**config)
 
         self.model = model
-        self.config = config
+        self.config = deepcopy(defaults)
         self.state = dict(N=models.num_parameters(self.model.ref),
                     t=0,
                     n = len(self.model.w),
                     ids = deepcopy(self.model.ids))
 
     def step(self, closure=None):
-        assert closure is not None, 'attach closure for DistESGD'
+        assert closure is not None, 'attach closure for Parle'
 
         state = self.state
         c = self.config
@@ -57,22 +54,6 @@ class DistESGD(object):
         n = state['n']
         ids = state['ids']
         rid = model.refid
-
-        lr = c['lr']
-        llr = c['llr']
-
-        mom = c['momentum']
-        wd = c['l2']
-        damp = c['dampening']
-        nesterov = c['nesterov']
-        verbose = c['verbose']
-        L = c['L']
-        g0 = c['g0']
-        g1 = c['g1']
-        gdot = c['gdot']
-        beta1 = c['beta1']
-        eps = c['eps']
-        clip = c['clip']
 
         if not 'w' in state:
             t = th.FloatTensor(N)
@@ -106,13 +87,14 @@ class DistESGD(object):
             for i in xrange(n):
                 dw[i].zero_()
             cfs, cerrs, cerrs5 = closure()
-            if wd > 0:
+            if c['l2'] > 0:
                 for i in xrange(n):
-                    dw[i].add_(wd, w[i])
+                    dw[i].add_(c['l2'], w[i])
             return cfs, cerrs, cerrs5
 
         fs, errs, errs5 = [None]*n, [None]*n, [None]*n
-        if L == 0:
+
+        if c['L'] == 0:
             fs, errs, errs5 = feval()
 
         for i in xrange(n):
@@ -120,89 +102,59 @@ class DistESGD(object):
             dwc[i].copy_(dw[i])
             mw[i].copy_(w[i])
 
-        gsgld = min(g0*(1+gdot)**state['t'], c['g0max'])
-        gesgd = min(g1*(1+gdot)**state['t'], c['g1max'])
+        g = min(c['g0']*(1+c['gdot'])**state['t'], c['g0m'])
+        rho = min(c['g1']*(1+c['gdot'])**state['t'], c['g1m'])
+        mom = (state['t']-1)/(state['t']+2)
 
-        for l in xrange(L):
+        for l in xrange(c['L']):
             fs, errs, errs5 = feval()
             for i in xrange(n):
 
-                dw[i].add_(gsgld, w[i]-wc[i])
+                dw[i].add_(g, w[i]-wc[i])
 
-                if eps > 0:
-                    eta[i].normal_()
-                    dw[i].add_(eps, eta[i])
+                if c['mom'] > 0:
+                    cmdw[i].mul_(mom).add_(1-c['damp'], dw[i])
+                    dw[i].add_(mom, cmdw[i])
 
-                if mom > 0:
-                    cmdw[i].mul_(mom).add_(1-damp, dw[i])
-                    if nesterov:
-                        dw[i].add_(mom, cmdw[i])
-                    else:
-                        dw[i].copy_(cmdw[i])
+                w[i].add_(-c['llr'], dw[i])
+                mw[i].mul_(c['beta1']).add_(1-c['beta1'], w[i])
 
-                if clip is not None:
-                    if dw[i].norm() > clip:
-                        dw[i].mul_(clip/dw[i].norm())
-
-                w[i].add_(-llr, dw[i])
-                mw[i].mul_(beta1).add_(1-beta1, w[i])
-
-        # update reference with mw
         r.zero_()
         r.copy_(comm.reduce_add(mw, rid)).mul_(1/float(n))
         rc = comm.broadcast(r, ids)
 
         for i in xrange(n):
-            if L > 0:
+            if c['L'] > 0:
                 dw[i].copy_(wc[i]-mw[i])
             else:
                 dw[i].copy_(dwc[i])
 
-            dw[i].add_(gesgd, wc[i]-rc[i])
+            dw[i].add_(rho, wc[i]-rc[i])
 
-            if mom > 0:
-                mdw[i].mul_(mom).add_(1-damp, dw[i])
-                if nesterov:
-                    dw[i].add_(mom, mdw[i])
-                else:
-                    dw[i].copy_(mdw[i])
-
-            if clip is not None:
-                if dw[i].norm() > clip:
-                    dw[i].mul_(clip/dw[i].norm())
+            if c['mom'] > 0:
+                mdw[i].mul_(mom).add_(1-c['damp'], dw[i])
+                dw[i].add_(mom, mdw[i])
 
             w[i].copy_(wc[i])
-            w[i].add_(-lr, dw[i])
+            w[i].add_(-c['lr'], dw[i])
 
         r.zero_()
         r.copy_(comm.reduce_add(w, rid)).mul_(1/float(n))
 
-        e = 1e-12
-        if verbose and state['t'] % 5 == 0:
-            for i in xrange(n):
-                debug = dict(
-                    dw=dw[i].norm(),
-                    dwc=dwc[i].norm(),
-                    de= gesgd*(w[i]-rc[i]).norm(),
-                    dwdwc=th.dot(dw[i], dwc[i])/(dw[i].norm()+e)/(dwc[i].norm()+e),
-                    wmu=th.dot(w[i], rc[i])/(w[i].norm()+e)/(rc[i].norm()+e),
-                    gsgld=gsgld, gesgd=gesgd)
-                print 'R[%2d]'%i, {k : round(v, 5) for k,v in debug.items()}
-
         return fs, errs, errs5
 
-class ElasticSGD(DistESGD):
+class ElasticSGD(Parle):
     def __init__(self, model, config = {}):
         config['L'] = 0
         super(ElasticSGD, self).__init__(model, config)
 
-class SGD(DistESGD):
+class SGD(Parle):
     def __init__(self, model, config = {}):
         config['L'] = 0
         config['g1'] = 0
         super(SGD, self).__init__(model, config)
 
-class EntropySGD(DistESGD):
+class EntropySGD(Parle):
     def __init__(self, model, config = {}):
         config['eps'] = 1e-4
         super(EntropySGD, self).__init__(model, config)
@@ -256,6 +208,8 @@ class ProxSGD(object):
 
         state['t'] += 1
         g = min(c['g0']*(1+c['gdot'])**state['t'], 1)
+        #mom = (state['t']-1)/(state['t']+2)
+        mom = c['mom']
 
         w, dw, mdw = state['w'], state['dw'], state['mdw']
         wc, dwc = state['wc'], state['dwc']
@@ -279,17 +233,17 @@ class ProxSGD(object):
 
             dw.add_(g, w-wc)
 
-            mdw.mul_(c['mom']).add_(1-c['damp'], dw)
-            dw.add_(c['mom'], mdw)
+            mdw.mul_(mom).add_(1-c['damp'], dw)
+            dw.add_(mom, mdw)
             w.add_(-c['lr'], dw)
 
             if l > c['L']:
                 stop = True
             l += 1
 
-        mdr.mul_(c['mom']).add_(1-c['damp'], wc-w)
+        mdr.mul_(mom).add_(1-c['damp'], wc-w)
         dr.zero_()
-        dr.add_(c['mom'], mdr)
+        dr.add_(mom, mdr)
         r.copy_(wc)
         r.add_(-1, dr)
 

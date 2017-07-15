@@ -115,12 +115,11 @@ def train(e):
             return feval
 
         fs, errs, errs5 = optimizer.step(helper())
-        f, err, err5 = np.mean(fs), np.mean(errs), np.mean(errs5)
         _dt = timer() - _dt
 
-        loss.add(f)
-        top1.add(err)
-        top5.add(err5)
+        loss.add(np.mean(fs))
+        top1.add(np.mean(errs))
+        top5.add(np.mean(errs5))
         dt.add(_dt)
 
         lm, t1m, t5m = loss.value()[0], top1.value()[0], top5.value()[0]
