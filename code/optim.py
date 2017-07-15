@@ -154,7 +154,7 @@ class DistESGD(object):
 
         for i in xrange(n):
             if L > 0:
-                dw[i].copy_((wc[i]-mw[i])*gsgld)
+                dw[i].copy_((wc[i]-mw[i]))
             else:
                 dw[i].copy_(dwc[i])
 
