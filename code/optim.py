@@ -175,7 +175,6 @@ class DistESGD(object):
             w[i].add_(-lr, dw[i])
 
 
-        r.zero_()
         r.copy_(comm.reduce_add(w, rid)).mul_(1/float(n))
 
         e = 1e-12
