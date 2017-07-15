@@ -258,7 +258,8 @@ class proxSGD(object):
 
             for k in ['w', 'dw', 'mdw', 'wc', 'dwc']:
                 state[k] = t.clone().cuda(ids[0])
-            state['r'], state['dr'], state['mdr'] = t.clone().cuda(rid), t.clone().cuda(rid), t.clone().cuda(rid)
+            state['r'], state['dr'], state['mdr'] = t.clone().cuda(rid), \
+                        t.clone().cuda(rid), t.clone().cuda(rid)
 
             flatten_params(model.w[0], state['w'], state['dw'])
             flatten_params(model.ref, state['r'], state['dr'])
@@ -293,13 +294,10 @@ class proxSGD(object):
 
             mdw.mul_(mom).add_(1-damp, dw)
             dw.add_(mom, mdw)
-
             w.add_(-lr, dw)
 
-            t1, t2 = (w-wc + g*dwc).norm(), g*dwc.norm()
             if l > L:
                 stop = True
-
             l += 1
 
         mdr.mul_(mom).add_(1-damp, wc-w)
