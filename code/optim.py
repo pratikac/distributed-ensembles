@@ -154,7 +154,7 @@ class DistESGD(object):
 
         for i in xrange(n):
             if L > 0:
-                dw[i].copy_((wc[i]-mw[i]))
+                dw[i].copy_(wc[i]-mw[i])
             else:
                 dw[i].copy_(dwc[i])
 
@@ -174,7 +174,7 @@ class DistESGD(object):
             w[i].copy_(wc[i])
             w[i].add_(-lr, dw[i])
 
-
+        r.zero_()
         r.copy_(comm.reduce_add(w, rid)).mul_(1/float(n))
 
         e = 1e-12
@@ -183,7 +183,7 @@ class DistESGD(object):
                 debug = dict(
                     dw=dw[i].norm(),
                     dwc=dwc[i].norm(),
-                    de= 1./gesgd*(w[i]-rc[i]).norm(),
+                    de= gesgd*(w[i]-rc[i]).norm(),
                     dwdwc=th.dot(dw[i], dwc[i])/(dw[i].norm()+e)/(dwc[i].norm()+e),
                     wmu=th.dot(w[i], rc[i])/(w[i].norm()+e)/(rc[i].norm()+e),
                     gsgld=gsgld, gesgd=gesgd)
