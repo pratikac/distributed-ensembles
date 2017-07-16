@@ -4,6 +4,7 @@ import numpy as np
 import time, logging, pprint
 
 import torch as th
+import torchnet as tnt
 import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 import argparse
@@ -180,3 +181,18 @@ def lrschedule(opt, e, logger=None):
     if opt['l'] and logger:
         logger.info('[LR] ' + json.dumps({'lr': lr}))
     return lr
+
+class AverageMeters(object):
+    def __init__(self, ks):
+        self.m = {}
+        for k in ks:
+            self.m[k] = tnt.meter.AverageValueMeter()
+    def add(self, v):
+        for k in v:
+            assert k in self.m, 'Key not found'
+            self.m[k].add(v[k])
+    def value(self):
+        return {k:self.m[k].value()[0] for k in self.m}
+    def reset(self):
+        for k in ks:
+            self.m[k].reset()

@@ -71,8 +71,6 @@ params = dict(t=0, gdot=opt['gdot']/len(loaders[0]['train']))
 opt.update(**params)
 optimizer = getattr(optim, opt['optim'])(model, config=opt)
 
-AverageMeter = tnt.meter.AverageValueMeter
-
 def train(e):
     optimizer.config['lr'] = lrschedule(opt, e, logger)
     model.train()
@@ -80,8 +78,7 @@ def train(e):
     n = opt['n']
     ids = deepcopy(model.ids)
 
-    loss, top1, top5, dt = AverageMeter(), AverageMeter(), \
-            AverageMeter(), AverageMeter()
+    meters = AverageMeters(['f', 'top1', 'top5', 'dt'])
 
     bsz = opt['b']
     maxb = len(loaders[0]['train'])
@@ -116,28 +113,27 @@ def train(e):
 
         fs, errs, errs5 = optimizer.step(helper())
         _dt = timer() - _dt
+        meters.add(dict(f=np.mean(fs), top1=np.mean(errs), top5=np.mean(errs5), dt=_dt))
 
-        loss.add(np.mean(fs))
-        top1.add(np.mean(errs))
-        top5.add(np.mean(errs5))
-        dt.add(_dt)
-
-        lm, t1m, t5m = loss.value()[0], top1.value()[0], top5.value()[0]
+        mm = meters.value()
         if opt['l'] and bi % 25 ==0 and bi > 0:
-            s = dict(i=bi + e*maxb, e=e, f=lm, top1=t1m, top5=t5m, dt=_dt)
+            s = dict(i=bi + e*maxb, e=e, train=True)
+            s.update(**mm)
             logger.info('[LOG] ' + json.dumps(s))
 
-        bif = int(5/dt.value()[0])+1
+        bif = int(5/mm['dt'])+1
         if bi % bif == 0 and bi > 0:
             print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f %2.2f%% %2.2f%%'))%(_dt,
-                e,bi,maxb, lm, t1m, t5m))
+                e,bi,maxb, mm['f'], mm['top1'], mm['top5']))
 
+    mm = meters.value()
     if opt['l']:
-        s = dict(e=e, i=0, f=lm, top1=t1m, top5=t5m, train=True, t=dt.sum)
+        s = dict(e=e, i=0, train=True)
+        s.update(**mm)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
-    print((color('blue', '++[%2d] %2.4f %2.2f%% %2.2f%% [%2.2fs]'))% (e, lm, t1m, t5m, dt.sum))
+    print((color('blue', '++[%2d] %2.4f %2.2f%% %2.2f%% [%2.2fs]'))% (e, mm['f'], mm['top1'], mm['top5'], meters.m['dt'].sum))
     print()
 
 def val(e):
@@ -151,8 +147,7 @@ def val(e):
         dry_feed(val_model, loaders[0]['train_full'], mid=rid)
 
     model.eval()
-
-    loss, top1, top5 = AverageMeter(), AverageMeter(), AverageMeter()
+    meters = AverageMeters(['f', 'top1', 'top5'])
 
     for bi, (x,y) in enumerate(loaders[0]['val']):
         bsz = x.size(0)
@@ -163,20 +158,21 @@ def val(e):
         yh = val_model(xc)
         f = criterion.cuda(rid)(yh, yc).data[0]
         err, err5 = clerr(yh.data, yc.data, topk=(1,5))
-        loss.add(f)
-        top1.add(err)
-        top5.add(err5)
+        meters.add(dict(f=f, top1=err, top5=err5))
 
+        mm = meters.value()
         if bi % 100 == 0 and bi > 0:
             print((color('red', '*[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, bi, \
-                    loss.value()[0], top1.value()[0], top5.value()[0]))
+                    mm['f'], mm['top1'], mm['top5']))
 
+    mm = meters.value()
     if opt['l']:
-        s = dict(e=e, i=0, f=loss.value()[0], top1=top1.value()[0], top5=top5.value()[0], val=True)
+        s = dict(e=e, i=0, value=True)
+        s.update(**mm)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
-    print((color('red', '**[%2d] %2.4f %2.4f%% %2.4f%%\n'))%(e, loss.value()[0], top1.value()[0], top5.value()[0]))
+    print((color('red', '**[%2d] %2.4f %2.4f%% %2.4f%%\n'))%(e, mm['f'], mm['top1'], mm['top5']))
     print('')
 
 def save_ensemble(e):
