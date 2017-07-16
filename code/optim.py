@@ -119,7 +119,6 @@ class Parle(object):
                 w[i].add_(-c['llr'], dw[i])
                 mw[i].mul_(c['beta1']).add_(1-c['beta1'], w[i])
 
-        r.zero_()
         r.copy_(comm.reduce_add(mw, rid)).mul_(1/float(n))
         rc = comm.broadcast(r, ids)
 
@@ -138,7 +137,6 @@ class Parle(object):
             w[i].copy_(wc[i])
             w[i].add_(-c['lr'], dw[i])
 
-        r.zero_()
         r.copy_(comm.reduce_add(w, rid)).mul_(1/float(n))
 
         return fs, errs, errs5

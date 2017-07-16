@@ -107,8 +107,6 @@ class allcnn(nn.Module):
             opt['d'] = 0.5
         if opt['l2'] < 0:
             opt['l2'] = 1e-3
-        if opt['augment'] and c1==96:
-            opt['d'] = 0.0
 
         if opt['dataset'] == 'cifar10' or opt['dataset'] == 'svhn':
             num_classes = 10
