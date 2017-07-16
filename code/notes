@@ -1,7 +1,0 @@
-n=6 with frac=0.5
-    train/test=4.5/8.8 @ 40 epochs
-        g0=0.03, g1=1e-4, and lr drops by 5 after every 10 epochs
-        only elastic coupling
-
-works!!
-python ensemble.py --frac 0.5 -n 6 --g00 0.03 --g01 1e-3 --g10 1 --g11 1e-3 -v -L 20 -m allcnn --dataset cifar10 -l --lrs '[[3,0.1],[6,0.02],[9,0.004],[12,0.001]]' -B 15
