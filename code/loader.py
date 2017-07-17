@@ -11,12 +11,11 @@ import os, sys, pdb, math, random
 import cv2
 import scipy.io as sio
 
-
-def get_iterator(d, transforms, bsz, nw=0, shuffle=True):
+def get_iterator(d, transforms, bsz, nw=0, shuffle=True, pin_memory=True):
     ds = tnt.dataset.TensorDataset([d['x'], d['y']])
     ds = ds.transform({0:transforms})
     return ds.parallel(batch_size=bsz,
-            num_workers=nw, shuffle=shuffle, pin_memory=True)
+            num_workers=nw, shuffle=shuffle, pin_memory=pin_memory)
 
 def shuffle_data(d):
     x, y = d['x'], d['y']
@@ -51,7 +50,7 @@ def get_loaders(d, transforms, opt):
                 idxs[i] = th.cat((th.arange(ns,n), th.arange(0,ne))).long()
                 xy = {  'x': th.cat((x[ns:], x[:ne])),
                         'y': th.cat((y[ns:], y[:ne]))}
-            tr.append(get_iterator(xy, transforms, opt['b'], nw=opt['nw'], shuffle=True))
+            tr.append(get_iterator(xy, transforms, opt['b'], nw=0, shuffle=True))
         return [dict(train=tr[i],val=tv,test=tv,train_full=trf,idx=idxs[i]) for i in xrange(opt['n'])]
 
 def mnist(opt):

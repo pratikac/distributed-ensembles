@@ -13,7 +13,7 @@ from timeit import default_timer as timer
 import numpy as np
 import logging
 from pprint import pprint
-import pdb, glob, sys
+import pdb, glob, sys, gc
 from copy import deepcopy
 
 opt = add_args([
@@ -85,9 +85,7 @@ def train(e):
 
     bsz = opt['b']
     maxb = len(loaders[0]['train'])
-    iters = [None]*n
-    for i in xrange(n):
-        iters[i] = loaders[i]['train'].__iter__()
+    iters = [loaders[i]['train'].__iter__() for i in xrange(n)]
 
     for bi in xrange(maxb):
         _dt = timer()
