@@ -36,18 +36,22 @@ def get_loaders(d, transforms, opt):
     else:
         n = d['train']['x'].size(0)
         tr = []
+        idxs = []
         for i in xrange(n):
             fs = (i % float(n)) % 1
             ns, ne = int(n*fs), int(n*(fs+opt['frac']))
             x, y = d['train']['x'], d['train']['y']
+
             if ne <= n:
+                idxs.append(th.arange(ns,ne).long())
                 xy = {'x': x[ns:ne], 'y': y[ns:ne]}
             else:
                 ne = ne % n
+                idxs[i] = th.cat((th.arange(ns,n), th.arange(0,ne))).long()
                 xy = {  'x': th.cat((x[ns:], x[:ne])),
                         'y': th.cat((y[ns:], y[:ne]))}
             tr.append(get_iterator(xy, transforms, opt['b'], nw=opt['nw'], shuffle=True))
-        return [dict(train=tr[i],val=tv,test=tv,train_full=trf) for i in xrange(opt['n'])]
+        return [dict(train=tr[i],val=tv,test=tv,train_full=trf,idx=idxs[i]) for i in xrange(opt['n'])]
 
 def mnist(opt):
     loc = '/local2/pratikac/mnist'
@@ -59,14 +63,14 @@ def mnist(opt):
     shuffle_data(d['train'])
     return d, lambda x: x
 
-def cifar10(opt):
+def cifar_helper(opt, s):
     loc = '/local2/pratikac/cifar/'
     if 'resnet' in opt['m']:
-        d1 = np.load(loc+'cifar10-train.npz')
-        d2 = np.load(loc+'cifar10-test.npz')
+        d1 = np.load(loc+s+'-train.npz')
+        d2 = np.load(loc+s+'-test.npz')
     else:
-        d1 = np.load(loc+'cifar10-train-proc.npz')
-        d2 = np.load(loc+'cifar10-test-proc.npz')
+        d1 = np.load(loc+s+'-train-proc.npz')
+        d2 = np.load(loc+s+'-test-proc.npz')
 
     d = {'train': {'x': th.from_numpy(d1['data']), 'y': th.from_numpy(d1['labels'])},
         'val': {'x': th.from_numpy(d2['data']), 'y': th.from_numpy(d2['labels'])}}
@@ -84,30 +88,11 @@ def cifar10(opt):
 
     return d, augment
 
+def cifar10(opt):
+    return cifar_helper(opt, 'cifar10')
+
 def cifar100(opt):
-    loc = '/local2/pratikac/cifar/'
-    if 'resnet' in opt['m']:
-        d1 = np.load(loc+'cifar100-train.npz')
-        d2 = np.load(loc+'cifar100-test.npz')
-    else:
-        d1 = np.load(loc+'cifar100-train-proc.npz')
-        d2 = np.load(loc+'cifar100-test-proc.npz')
-
-    d = {'train': {'x': th.from_numpy(d1['data']), 'y': th.from_numpy(d1['labels'])},
-        'val': {'x': th.from_numpy(d2['data']), 'y': th.from_numpy(d2['labels'])}}
-    shuffle_data(d['train'])
-
-    sz = d['train']['x'].size(3)
-    augment = tnt.transform.compose([
-        lambda x: x.numpy().astype(np.float32),
-        lambda x: x.transpose(1,2,0),
-        T.RandomHorizontalFlip(),
-        T.Pad(4, cv2.BORDER_REFLECT),
-        T.RandomCrop(sz),
-        lambda x: x.transpose(2,0,1),
-        th.from_numpy])
-
-    return d, lambda x: x
+    return cifar_helper(opt, 'cifar100')
 
 def svhn(opt):
     loc = '/local2/pratikac/svhn/'
