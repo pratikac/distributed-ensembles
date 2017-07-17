@@ -1,5 +1,6 @@
 import argparse, math, random
 import torch as th
+import torchnet as tnt
 
 import loader
 import numpy as np
@@ -8,22 +9,42 @@ import pdb, glob, sys, os
 bsz = 1024
 L = 1
 n = 3
+maxb = 500
 
-opt = dict(b=bsz, frac=0.5, n=n, m='cifar10', augment=True, nw=4)
+opt = dict(b=bsz, frac=1.0, n=3, m='mnist', augment=True, nw=1)
 d, augment = getattr(loader, opt['m'])(opt)
-loaders = loader.get_loaders(d, augment, opt)
-ds = loaders[0]['train']
+
+class DS(object):
+    def __init__(self, d):
+        self.d = d
+        self.n = d['x'].size(0)
+
+    def __getitem__(self, idx):
+        i = idx % self.n
+        return (self.d['x'][i], self.d['y'][i])
+
+    def __len__(self):
+        return 2**20
+
+ds = [th.utils.data.DataLoader(DS(d['train']), batch_size=opt['b']) for _ in xrange(opt['n'])]
+
+# for e in xrange(100):
+#     for bi, (x,y) in enumerate(ds[0]):
+#         print e, bi
+#         if bi > 500:
+#             break
 
 # option 1
-dsiter = ds.__iter__()
-for e in xrange(1000):
-    maxb = len(ds)
-    print 'maxb: ', maxb
+# loaders = loader.get_loaders(d, augment, opt)
+# ds = loaders[0]['train']
+iters = [ds[i].__iter__() for i in xrange(opt['n'])]
+for e in xrange(100):
     for bi in xrange(maxb):
         for l in xrange(L):
-            try:
-                x,y = next(dsiter)
-            except StopIteration:
-                dsiter = ds.__iter__()
-                x,y = next(dsiter)
+            for ni in xrange(opt['n']):
+                try:
+                    x,y = next(iters[i])
+                except StopIteration:
+                    iters[i] = ds[i].__iter__()
+                    x,y = next(iters[i])
         print e, bi

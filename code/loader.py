@@ -11,11 +11,29 @@ import os, sys, pdb, math, random
 import cv2
 import scipy.io as sio
 
-def get_iterator(d, transforms, bsz, nw=0, shuffle=True, pin_memory=True):
+class InfDS(object):
+    def __init__(self, d):
+        self.d = d
+        self.n = d['x'].size(0)
+
+    def __getitem__(self, idx):
+        i = idx % self.n
+        return [self.d['x'][i], self.d['y'][i]]
+
+    def __len__(self):
+        return 2**20
+
+def get_inf_iterator(d, transforms, bsz, nw=0, shuffle=True, pin_memory=True):
+    ds = InfDS(d)
+    ds = tnt.dataset.TransformDataset(ds, {0:transforms})
+    return th.utils.data.DataLoader(ds, batch_size=bsz,
+            num_workers=nw, shuffle=shuffle, pin_memory=pin_memory)
+
+def get_iterator(d, transforms, bsz, nw=0, shuffle=True):
     ds = tnt.dataset.TensorDataset([d['x'], d['y']])
     ds = ds.transform({0:transforms})
     return ds.parallel(batch_size=bsz,
-            num_workers=nw, shuffle=shuffle, pin_memory=pin_memory)
+            num_workers=nw, shuffle=shuffle, pin_memory=True)
 
 def shuffle_data(d):
     x, y = d['x'], d['y']
@@ -29,10 +47,11 @@ def get_loaders(d, transforms, opt):
         transforms = lambda x: x
 
     trf = get_iterator(d['train'], transforms, opt['b'], nw=opt['nw'], shuffle=True)
+    trinff = get_inf_iterator(d['train'], transforms, opt['b'], nw=opt['nw'], shuffle=True)
     tv = get_iterator(d['val'], lambda x:x, opt['b'], nw=opt['nw'], shuffle=False)
 
     if opt['frac'] > 1-1e-12:
-        return [dict(train=trf,val=tv,test=tv,train_full=trf) for i in xrange(opt['n'])]
+        return [dict(train=trinff,val=tv,test=tv,train_full=trf) for i in xrange(opt['n'])]
     else:
         n = d['train']['x'].size(0)
         tr = []
@@ -50,7 +69,7 @@ def get_loaders(d, transforms, opt):
                 idxs[i] = th.cat((th.arange(ns,n), th.arange(0,ne))).long()
                 xy = {  'x': th.cat((x[ns:], x[:ne])),
                         'y': th.cat((y[ns:], y[:ne]))}
-            tr.append(get_iterator(xy, transforms, opt['b'], nw=0, shuffle=True))
+            tr.append(get_inf_iterator(xy, transforms, opt['b'], nw=0, shuffle=True))
         return [dict(train=tr[i],val=tv,test=tv,train_full=trf,idx=idxs[i]) for i in xrange(opt['n'])]
 
 def mnist(opt):

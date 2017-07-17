@@ -13,7 +13,7 @@ from timeit import default_timer as timer
 import numpy as np
 import logging
 from pprint import pprint
-import pdb, glob, sys, gc
+import pdb, glob, sys, gc, time
 from copy import deepcopy
 
 opt = add_args([
@@ -46,8 +46,8 @@ opt = add_args([
 ['--save', False, 'save ckpt'],
 ])
 
-if opt['n'] > 1:
-    opt['nw'] = 0
+# if opt['n'] > 1:
+#     opt['nw'] = 0
 
 if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
@@ -84,7 +84,7 @@ def train(e):
     meters = AverageMeters(['f', 'top1', 'top5', 'dt'])
 
     bsz = opt['b']
-    maxb = len(loaders[0]['train'])
+    maxb = int(len(loaders[0]['train_full'])*opt['frac'])
     iters = [loaders[i]['train'].__iter__() for i in xrange(n)]
 
     for bi in xrange(maxb):
@@ -98,6 +98,9 @@ def train(e):
                     try:
                         x, y = next(iters[i])
                     except StopIteration:
+                        if iters[i].num_workers > 0:
+                            iters[i]._shutdown_workers()
+                        time.sleep(0.1)
                         iters[i] = loaders[i]['train'].__iter__()
                         x, y = next(iters[i])
                     xs[i], ys[i] =  Variable(x.cuda(ids[i])), Variable(y.squeeze().cuda(ids[i]))
