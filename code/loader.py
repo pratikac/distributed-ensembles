@@ -31,6 +31,7 @@ def get_loaders(d, transforms, opt):
 
     trf = get_iterator(d['train'], transforms, opt['b'], nw=opt['nw'], shuffle=True)
     tv = get_iterator(d['val'], lambda x:x, opt['b'], nw=opt['nw'], shuffle=False)
+
     if opt['frac'] > 1-1e-12:
         return [dict(train=trf,val=tv,test=tv,train_full=trf) for i in xrange(opt['n'])]
     else:

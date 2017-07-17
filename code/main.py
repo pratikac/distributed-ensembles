@@ -38,13 +38,16 @@ opt = add_args([
 ['--g1', 1.0, 'elastic gamma'],
 ['--gdot', 0.5, 'gamma dot'],
 ['-s', 42, 'seed'],
-['--nw', 0, 'workers'],
+['--nw', 4, 'workers'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
 ['-v', False, 'verbose'],
 ['-r', '', 'resume ckpt'],
 ['--save', False, 'save ckpt'],
 ])
+
+if opt['n'] > 1:
+    opt['nw'] = 0
 
 if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
