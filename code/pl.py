@@ -23,6 +23,7 @@ opt = add_args([
 ['--gpus', '', 'gpus'],
 ['-d', 0.0, 'dropout'],
 ['-b', 128, 'batch_size'],
+['--bb', 1024, 'batch_size'],
 ['-e', 100, 'epochs'],
 ['-B', 100, 'max epochs'],
 ['--lr', 0.1, 'learning rate'],
@@ -47,10 +48,11 @@ dataset, augment = getattr(loader, opt['dataset'])(opt)
 loaders = loader.get_loaders(dataset, augment, opt)
 mnist = loaders[0]['train_full']
 
-opt['b'] = 16384
+b = opt['b']
+opt['b'] = opt['bb']
 loaders_lbsz = loader.get_loaders(dataset, augment, opt)
 mnist_lbsz = loaders_lbsz[0]['train_full']
-opt['b'] = 128
+opt['b'] = b
 
 model = models.lenets(opt).cuda(gid)
 criterion = nn.CrossEntropyLoss().cuda(gid)
