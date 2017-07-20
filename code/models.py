@@ -148,7 +148,7 @@ class allcnn(nn.Module):
 
 class allcnns(allcnn):
     name = 'allcnns'
-    def __init__(self, opt, c1=16, c2=32):
+    def __init__(self, opt, c1=32, c2=64):
         super(allcnns, self).__init__(opt, c1, c2)
 
 class allcnnl(allcnn):

@@ -23,9 +23,10 @@ opt = vars(parser.parse_args())
 if not opt['i'] == '':
     d = loaddir(opt['i'], expr='/*mnist*', force=opt['f'])
 
-d['pl'] = d.fulldw**2/2/d.fullf
-d['vardw'] = (d.fulldw - d.dw)**2
 
 plt.figure(1)
 plt.clf()
-sns.tsplot(time='i',value='pl',data=d, unit='s')
+sns.tsplot(time='i',value='pl',data=d, unit='s', color='k')
+plt.title(r'Polyak-Lojasewicz inequality')
+plt.xlabel(r'iterations')
+plt.ylabel(r'|grad f|^2/f')

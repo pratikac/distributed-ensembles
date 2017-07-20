@@ -16,8 +16,8 @@ import pdb, glob, sys, gc, time
 
 opt = add_args([
 ['-o', '/local2/pratikac/results', 'output'],
-['-m', 'lenets', 'lenet'],
-['--dataset', 'mnist', 'mnist'],
+['-m', 'lenet', 'lenet | allcnns'],
+['--dataset', 'mnist', 'mnist | cifar10'],
 ['-g', 0, 'gpu idx'],
 ['-n', 1, 'num loaders'],
 ['--gpus', '', 'gpus'],
@@ -25,9 +25,9 @@ opt = add_args([
 ['-b', 128, 'batch_size'],
 ['--bb', 128, 'batch_size'],
 ['--full_grad', False, 'calculate full grad'],
-['-e', 100, 'epochs'],
 ['-B', 10, 'max epochs'],
 ['--lr', 0.1, 'learning rate'],
+['--l2', -1.0, 'ell2'],
 ['--lrs', '[[6,0.1],[10,0.01]]', 'lrs'],
 ['-s', 42, 'seed'],
 ['--nw', 0, 'workers'],
@@ -38,8 +38,10 @@ opt = add_args([
 ])
 
 gid = opt['g']
-
 ngpus = th.cuda.device_count()
+if gid >= ngpus:
+    gid = 0
+
 gpus = [i if opt['g'] >= ngpus else opt['g'] for i in xrange(ngpus)]
 if not opt['gpus'] == '':
     gpus = json.loads(opt['gpus'])
@@ -47,41 +49,18 @@ setup(t=4, s=opt['s'], gpus=gpus)
 
 dataset, augment = getattr(loader, opt['dataset'])(opt)
 loaders = loader.get_loaders(dataset, augment, opt)
-mnist = loaders[0]['train_full']
+data = loaders[0]['train_full']
 
 b = opt['b']
 opt['b'] = opt['bb']
 loaders_lbsz = loader.get_loaders(dataset, augment, opt)
-mnist_lbsz = loaders_lbsz[0]['train_full']
+data_lbsz = loaders_lbsz[0]['train_full']
 opt['b'] = b
 
-c1, c2, c3 = 20, 50, 500
-class View(nn.Module):
-    def __init__(self,o):
-        super(View, self).__init__()
-        self.o = o
-    def forward(self,x):
-        return x.view(-1, self.o)
+model = getattr(models, opt['m'])(opt).cuda()
+if opt['g'] >= ngpus:
+    model = nn.DataParallel(model)
 
-def convbn(ci,co,ksz,psz,p):
-    return nn.Sequential(
-        nn.Conv2d(ci,co,ksz),
-        nn.BatchNorm2d(co),
-        nn.ReLU(True),
-        nn.MaxPool2d(psz,stride=psz),
-        nn.Dropout(p))
-
-model = nn.Sequential(
-    convbn(1,c1,5,3,opt['d']),
-    convbn(c1,c2,5,2,opt['d']),
-    View(c2*2*2),
-    nn.Linear(c2*2*2, c3),
-    nn.BatchNorm1d(c3),
-    nn.ReLU(True),
-    nn.Dropout(opt['d']),
-    nn.Linear(c3,10))
-
-model = model.cuda(gid)
 criterion = nn.CrossEntropyLoss().cuda(gid)
 optimizer = th.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, nesterov=True)
 
@@ -98,8 +77,9 @@ optim.flatten_params(model, fw, dfw)
 def full_grad():
     grad = th.FloatTensor(N).cuda(gid).zero_()
     loss, top1, top5 = 0, 0, 0
+    n = float(len(data_lbsz))
 
-    for bi, (x,y) in enumerate(mnist_lbsz):
+    for bi, (x,y) in enumerate(data_lbsz):
         xc,yc = Variable(x.cuda(gid)), Variable(y.squeeze().cuda(gid))
         model.zero_grad()
         yh = model(xc)
@@ -113,21 +93,21 @@ def full_grad():
         top1 += err
         top5 += err5
 
-    loss /= float(len(mnist_lbsz))
-    grad /= float(len(mnist_lbsz))
-    top1 /= float(len(mnist_lbsz))
-    top5 /= float(len(mnist_lbsz))
+    loss /= n
+    grad /= n
+    top1 /= n
+    top5 /= n
     return loss, grad, top1, top5
 
-for e in xrange(opt['e']):
+for e in xrange(opt['B']):
     model.train()
 
     lr = lrschedule(opt, e, logger)
     for g in optimizer.param_groups:
         g['lr'] = lr
 
-    maxb = len(mnist)
-    for bi, (x,y) in enumerate(mnist):
+    maxb = len(data)
+    for bi, (x,y) in enumerate(data):
         bsz = x.size(0)
         dt = timer()
 
