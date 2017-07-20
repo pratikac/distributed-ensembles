@@ -31,6 +31,7 @@ opt = add_args([
 ['--augment', False, 'augment'],
 ['--frac', 1.0, 'frac'],
 ['-l', False, 'log'],
+['-v', False, 'verbose'],
 ])
 
 gid = opt['g']
@@ -78,7 +79,7 @@ def full_grad():
         grad.add_(dfw)
 
     loss /= float(len(mnist_lbsz))
-    grad /= grad/float(len(mnist_lbsz))
+    grad /= float(len(mnist_lbsz))
     return loss, grad
 
 for e in xrange(opt['e']):
@@ -114,7 +115,7 @@ for e in xrange(opt['e']):
         s['fulldw'] = fgrad.norm()
         s['dw_fulldw'] = dfw.dot(fgrad)/dfw.norm()/fgrad.norm()
 
-        if bi % 25 == 0 and bi > 0:
+        if bi % 25 == 0 and bi > 0 and opt['v']:
             print s
 
         if opt['l']:
