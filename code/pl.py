@@ -23,7 +23,8 @@ opt = add_args([
 ['--gpus', '', 'gpus'],
 ['-d', 0.0, 'dropout'],
 ['-b', 128, 'batch_size'],
-['--bb', 1024, 'batch_size'],
+['--bb', 128, 'batch_size'],
+['--full_grad', False, 'calculate full grad'],
 ['-e', 100, 'epochs'],
 ['-B', 100, 'max epochs'],
 ['--lr', 0.1, 'learning rate'],
@@ -54,13 +55,39 @@ loaders_lbsz = loader.get_loaders(dataset, augment, opt)
 mnist_lbsz = loaders_lbsz[0]['train_full']
 opt['b'] = b
 
-model = getattr(models, opt['m'])(opt).cuda(gid)
+c1, c2, c3 = 20, 50, 500
+class View(nn.Module):
+    def __init__(self,o):
+        super(View, self).__init__()
+        self.o = o
+    def forward(self,x):
+        return x.view(-1, self.o)
+
+def convbn(ci,co,ksz,psz,p):
+    return nn.Sequential(
+        nn.Conv2d(ci,co,ksz),
+        nn.BatchNorm2d(co),
+        nn.ReLU(True),
+        nn.MaxPool2d(psz,stride=psz),
+        nn.Dropout(p))
+
+model = nn.Sequential(
+    convbn(1,c1,5,3,opt['d']),
+    convbn(c1,c2,5,2,opt['d']),
+    View(c2*2*2),
+    nn.Linear(c2*2*2, c3),
+    nn.BatchNorm1d(c3),
+    nn.ReLU(True),
+    nn.Dropout(opt['d']),
+    nn.Linear(c3,10))
+
+model = model.cuda(gid)
 criterion = nn.CrossEntropyLoss().cuda(gid)
 optimizer = th.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, nesterov=True)
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
-                            'f','v', 'augment', 't', 'nw',
-                            'save','e','l2','r', 'lr', 'bb'])
+                            'f','v', 'augment', 't', 'nw', 'frac', 'nw', 'frac', 'd', 'b',
+                            'save','e','l2','r', 'lr', 'bb', 'full_grad'])
 logger = create_logger(opt)
 pprint(opt)
 
@@ -122,13 +149,17 @@ for e in xrange(opt['e']):
                 deltaw=(fw-fwc).norm(),
                 dt=timer()-dt)
 
-        ff, fgrad, ftop1, ftop5 = full_grad()
-        s['fullf'] = ff
-        s['ftop1'], s['ftop5'] = ftop1, ftop5
-        s['fulldw'] = fgrad.norm()
-        s['dw_fulldw'] = dfw.dot(fgrad)/dfw.norm()/fgrad.norm()
+        if opt['full_grad']:
+            ff, fgrad, ftop1, ftop5 = full_grad()
+            s['fullf'] = ff
+            s['ftop1'], s['ftop5'] = ftop1, ftop5
+            s['fulldw'] = fgrad.norm()
+            s['vardw'] = (fgrad - dfw).norm()
+            s['pl'] = fgrad.norm()**2/2./ff
+            s['dw_fulldw'] = dfw.dot(fgrad)/dfw.norm()/fgrad.norm()
 
-        if bi % 25 == 0 and bi > 0 and opt['v']:
+        bif = 1 if opt['full_grad'] else 25
+        if bi % bif == 0 and bi > 0 and opt['v']:
             print s, timer()-dt
 
         if opt['l']:
