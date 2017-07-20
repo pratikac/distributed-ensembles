@@ -90,7 +90,7 @@ def full_grad():
     grad /= float(len(mnist_lbsz))
     top1 /= float(len(mnist_lbsz))
     top5 /= float(len(mnist_lbsz))
-    return loss, grad, (top1, top5)
+    return loss, grad, top1, top5
 
 for e in xrange(opt['e']):
     model.train()
