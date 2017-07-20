@@ -26,9 +26,9 @@ opt = add_args([
 ['--bb', 128, 'batch_size'],
 ['--full_grad', False, 'calculate full grad'],
 ['-e', 100, 'epochs'],
-['-B', 100, 'max epochs'],
+['-B', 10, 'max epochs'],
 ['--lr', 0.1, 'learning rate'],
-['--lrs', '[[30,0.1],[60,0.01],[90,0.001],[100,0.0001]]', 'lrs'],
+['--lrs', '[[6,0.1],[10,0.01]]', 'lrs'],
 ['-s', 42, 'seed'],
 ['--nw', 0, 'workers'],
 ['--augment', False, 'augment'],
@@ -154,12 +154,13 @@ for e in xrange(opt['e']):
             s['fullf'] = ff
             s['ftop1'], s['ftop5'] = ftop1, ftop5
             s['fulldw'] = fgrad.norm()
-            s['vardw'] = (fgrad - dfw).norm()
+            s['vardw'] = (fgrad - dfw).norm()**2
+            s['biasdw'] = (fgrad - dfw).sum()
             s['pl'] = fgrad.norm()**2/2./ff
             s['dw_fulldw'] = dfw.dot(fgrad)/dfw.norm()/fgrad.norm()
 
-        bif = 1 if opt['full_grad'] else 25
-        if bi % bif == 0 and bi > 0 and opt['v']:
+        bif = 1 if opt['full_grad'] and opt['v'] else 25
+        if bi % bif == 0 and bi > 0:
             print s, timer()-dt
 
         if opt['l']:
