@@ -45,7 +45,7 @@ dataset, augment = getattr(loader, opt['dataset'])(opt)
 loaders = loader.get_loaders(dataset, augment, opt)
 mnist = loaders[0]['train_full']
 
-opt['b'] = 4096
+opt['b'] = 16384
 loaders_lbsz = loader.get_loaders(dataset, augment, opt)
 mnist_lbsz = loaders_lbsz[0]['train_full']
 
@@ -82,7 +82,9 @@ for e in xrange(opt['e']):
 
     lr = lrschedule(opt, e, logger)
     for g in optimizer.param_groups:
-        g['lr'] = lr
+        if not g['lr'] == lr:
+            print 'LR: ', lr
+            g['lr'] == lr
 
     maxb = len(mnist)
     for bi, (x,y) in enumerate(mnist):
