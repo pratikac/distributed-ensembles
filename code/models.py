@@ -91,6 +91,11 @@ class lenet(nn.Module):
     def forward(self, x):
         return self.m(x)
 
+class lenets(lenet):
+    name = 'lenets'
+    def __init__(self, opt, c1=5, c2=10, c3=64):
+        super(lenets, self).__init__(opt, c1, c2, c3)
+
 class lenetl(lenet):
     name = 'lenetl'
     def __init__(self, opt, c1=40, c2=100, c3=1000):

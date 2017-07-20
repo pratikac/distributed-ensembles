@@ -32,7 +32,7 @@ class Parle(object):
                 l2=0, L=25, beta1=0.75,
                 g0=0.01, g1=1.0, gdot=0.5,
                 g0m=1, g1m=10,
-                verbose=False,
+                v=False,
                 t=0)
         defaults.update(**config)
 
@@ -163,7 +163,7 @@ class ProxSGD(object):
         defaults = dict(lr=0.1, mom=0.9, damp=0,
                 l2=0, L=25,
                 g0=0.01, gdot=1e-3,
-                verbose=False,
+                v=False,
                 t=0)
         defaults.update(**config)
 
@@ -228,6 +228,9 @@ class ProxSGD(object):
         stop = False
         while not stop:
             fs, errs, errs5 = feval()
+
+            if c['v']:
+                print dw.norm()
 
             dw.add_(g, w-wc)
 

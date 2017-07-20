@@ -70,7 +70,7 @@ pprint(opt)
 dataset, augment = getattr(loader, opt['dataset'])(opt)
 loaders = loader.get_loaders(dataset, augment, opt)
 
-params = dict(t=0, gdot=opt['gdot']/len(loaders[0]['train']))
+params = dict(t=0, gdot=opt['gdot']/len(loaders[0]['train_full']))
 opt.update(**params)
 optimizer = getattr(optim, opt['optim'])(model, config=opt)
 
@@ -213,7 +213,7 @@ if not opt['r'] == '':
     opt['e'] = d['e'] + 1
 
     print('[Loading new optimizer]')
-    params = dict(t=d['t'], gdot=opt['gdot']/len(loaders[0]['train']))
+    params = dict(t=d['t'], gdot=opt['gdot']/len(loaders[0]['train_full']))
     optimizer = getattr(optim, opt['optim'])(model, config = opt.update(**params))
 
 for e in xrange(opt['e'], opt['B']):
