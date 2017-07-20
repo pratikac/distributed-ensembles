@@ -54,13 +54,13 @@ loaders_lbsz = loader.get_loaders(dataset, augment, opt)
 mnist_lbsz = loaders_lbsz[0]['train_full']
 opt['b'] = b
 
-model = models.lenets(opt).cuda(gid)
+model = getattr(models, opt['m'])(opt).cuda(gid)
 criterion = nn.CrossEntropyLoss().cuda(gid)
 optimizer = th.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, nesterov=True)
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
                             'f','v', 'augment', 't', 'nw',
-                            'save','e','l2','r', 'lr'])
+                            'save','e','l2','r', 'lr', 'bb'])
 logger = create_logger(opt)
 pprint(opt)
 
