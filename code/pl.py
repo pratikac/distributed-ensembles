@@ -7,6 +7,7 @@ from torch.autograd import Variable
 
 from exptutils import *
 import models, loader, optim
+from timeit import default_timer as timer
 
 import numpy as np
 import logging
@@ -49,6 +50,7 @@ mnist = loaders[0]['train_full']
 opt['b'] = 16384
 loaders_lbsz = loader.get_loaders(dataset, augment, opt)
 mnist_lbsz = loaders_lbsz[0]['train_full']
+opt['b'] = 128
 
 model = models.lenets(opt).cuda(gid)
 criterion = nn.CrossEntropyLoss().cuda(gid)
@@ -87,11 +89,12 @@ for e in xrange(opt['e']):
 
     lr = lrschedule(opt, e, logger)
     for g in optimizer.param_groups:
-        g['lr'] == lr
+        g['lr'] = lr
 
     maxb = len(mnist)
     for bi, (x,y) in enumerate(mnist):
         bsz = x.size(0)
+        dt = timer()
 
         xc,yc = Variable(x.cuda(gid)), Variable(y.squeeze().cuda(gid))
 
@@ -108,15 +111,15 @@ for e in xrange(opt['e']):
         s = dict(i=bi + e*maxb, e=e,
                 f=f.data[0], top1=err, top5=err5,
                 dw=dfw.norm(), w=fw.norm(),
-                deltaw=(fw-fwc).norm()
-                )
+                deltaw=(fw-fwc).norm(),
+                dt=timer()-dt)
         ff, fgrad = full_grad()
         s['fullf'] = ff
         s['fulldw'] = fgrad.norm()
         s['dw_fulldw'] = dfw.dot(fgrad)/dfw.norm()/fgrad.norm()
 
         if bi % 25 == 0 and bi > 0 and opt['v']:
-            print s
+            print s, timer()-dt
 
         if opt['l']:
             logger.info('[LOG] ' + json.dumps(s))
