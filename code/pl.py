@@ -82,9 +82,7 @@ for e in xrange(opt['e']):
 
     lr = lrschedule(opt, e, logger)
     for g in optimizer.param_groups:
-        if not g['lr'] == lr:
-            print 'LR: ', lr
-            g['lr'] == lr
+        g['lr'] == lr
 
     maxb = len(mnist)
     for bi, (x,y) in enumerate(mnist):
@@ -102,13 +100,13 @@ for e in xrange(opt['e']):
         optimizer.step()
 
         err, err5 = clerr(yh.data, yc.data, topk=(1,5))
-        s = dict(i=bi + e*maxb, e=e, train=True,
+        s = dict(i=bi + e*maxb, e=e,
                 f=f.data[0], top1=err, top5=err5,
                 dw=dfw.norm(), w=fw.norm(),
                 deltaw=(fw-fwc).norm()
                 )
         fgrad = full_grad()
-        s['full_grad'] = fgrad.norm()
+        s['fulldw'] = fgrad.norm()
         s['dw_fulldw'] = dfw.dot(fgrad)/dfw.norm()/fgrad.norm()
 
         if bi % 25 == 0 and bi > 0:
