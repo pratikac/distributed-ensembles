@@ -70,7 +70,7 @@ optim.flatten_params(model, fw, dfw)
 
 def full_grad():
     grad = th.FloatTensor(N).cuda(gid).zero_()
-    loss = 0
+    loss, top1, top5 = 0, 0, 0
 
     for bi, (x,y) in enumerate(mnist_lbsz):
         xc,yc = Variable(x.cuda(gid)), Variable(y.squeeze().cuda(gid))
@@ -79,12 +79,18 @@ def full_grad():
         f = criterion(yh, yc)
         f.backward()
 
+        err, err5 = clerr(yh.data, yc.data, topk=(1,5))
+
         loss += f.data[0]
         grad.add_(dfw)
+        top1 += err
+        top5 += err5
 
     loss /= float(len(mnist_lbsz))
     grad /= float(len(mnist_lbsz))
-    return loss, grad
+    top1 /= float(len(mnist_lbsz))
+    top5 /= float(len(mnist_lbsz))
+    return loss, grad, (top1, top5)
 
 for e in xrange(opt['e']):
     model.train()
@@ -115,8 +121,10 @@ for e in xrange(opt['e']):
                 dw=dfw.norm(), w=fw.norm(),
                 deltaw=(fw-fwc).norm(),
                 dt=timer()-dt)
-        ff, fgrad = full_grad()
+
+        ff, fgrad, ftop1, ftop5 = full_grad()
         s['fullf'] = ff
+        s['ftop1'], s['ftop5'] = ftop1, ftop5
         s['fulldw'] = fgrad.norm()
         s['dw_fulldw'] = dfw.dot(fgrad)/dfw.norm()/fgrad.norm()
 
