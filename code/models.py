@@ -50,9 +50,8 @@ class mnistfc(nn.Module):
             nn.Linear(c,10))
 
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
-        print(s)
+        # print(s)
         logging.info(s)
-
 
     def forward(self, x):
         return self.m(x)
@@ -85,7 +84,7 @@ class lenet(nn.Module):
             nn.Linear(c3,10))
 
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
-        print(s)
+        #print(s)
         logging.info(s)
 
     def forward(self, x):
@@ -140,7 +139,7 @@ class allcnn(nn.Module):
             View(num_classes))
 
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
-        print(s)
+        #print(s)
         logging.info(s)
 
     def forward(self, x):
@@ -233,7 +232,7 @@ class wideresnet(nn.Module):
                 m.bias.data.zero_()
 
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
-        print(s)
+        #print(s)
         logging.info(s)
 
     def forward(self, x):
@@ -431,3 +430,41 @@ class ReplicateModel(nn.Module):
         self.ref.eval()
         for i in xrange(self.n):
             self.w[i].eval()
+
+class FederatedModel(nn.Module):
+    def __init__(self, opt, gpus):
+        super(FederatedModel, self).__init__()
+
+        self.gpus = gpus
+
+        self.t = 0
+        self.n = opt['n']
+        n = self.n
+
+        self.ids = [gpus[i%len(gpus)] for i in xrange(n)]
+        self.w = [globals()[opt['m']](opt) for i in xrange(n)]
+
+        self.refid = self.ids[0]
+        self.ref = globals()[opt['m']](opt)
+
+    def forward(self, ids, xs, ys):
+        xs = [[a] for a in xs]
+        ws = [self.w[ii].cuda(self.ids[ii]) for ii in ids]
+        assert len(ids) == len(xs) and len(xs) == len(ys)
+        fs = parallel_apply(ws, xs)
+        return fs
+
+    def backward(self, ids, fs):
+        f = sum(gather(fs, self.refid))
+        f.backward()
+        for ii in ids:
+            self.w[ii].cpu()
+
+    def train(self):
+        self.ref.train()
+        for i in xrange(self.n):
+            self.w[i].train()
+
+    def eval(self):
+        self.ref.eval()
+        self.ref.cuda(self.refid)

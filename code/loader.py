@@ -51,26 +51,36 @@ def get_loaders(d, transforms, opt):
     tv = get_iterator(d['val'], lambda x:x, opt['b'], nw=opt['nw'], shuffle=False)
 
     if opt['frac'] > 1-1e-12:
-        return [dict(train=trinff,val=tv,test=tv,train_full=trf) for i in xrange(opt['n'])]
+        return [dict(train=trinff,val=tv,test=tv,train_full=trf,
+                idx=th.arange(0,d['train']['x'].size(0))) for i in xrange(opt['n'])]
     else:
-        n = d['train']['x'].size(0)
+        n = opt['n']
+        N = d['train']['x'].size(0)
         tr = []
         idxs = []
         for i in xrange(n):
-            fs = (i % float(n)) % 1
-            ns, ne = int(n*fs), int(n*(fs+opt['frac']))
+            fs = (i / float(n)) % 1.0
+            ns, ne = int(N*fs), int(N*(fs+opt['frac']))
             x, y = d['train']['x'], d['train']['y']
 
-            if ne <= n:
+            if ne <= N:
                 idxs.append(th.arange(ns,ne).long())
                 xy = {'x': x[ns:ne], 'y': y[ns:ne]}
             else:
-                ne = ne % n
-                idxs[i] = th.cat((th.arange(ns,n), th.arange(0,ne))).long()
+                ne = ne % N
+                idxs.append(th.cat((th.arange(ns,N), th.arange(0,ne))).long())
                 xy = {  'x': th.cat((x[ns:], x[:ne])),
                         'y': th.cat((y[ns:], y[:ne]))}
             tr.append(get_inf_iterator(xy, transforms, opt['b'], nw=0, shuffle=True))
         return [dict(train=tr[i],val=tv,test=tv,train_full=trf,idx=idxs[i]) for i in xrange(opt['n'])]
+
+# def get_federated_loaders(d, transforms, opt):
+#     if not opt['augment']:
+#         transforms = lambda x: x
+
+#     tv = get_iterator(d['val'], lambda x:x, opt['b'], nw=opt['nw'], shuffle=False)
+#     assert
+
 
 def mnist(opt):
     loc = '/local2/pratikac/mnist'

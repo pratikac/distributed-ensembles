@@ -21,8 +21,9 @@ parser.add_argument('-f',
 opt = vars(parser.parse_args())
 
 if not opt['i'] == '':
-    d = loaddir(opt['i'], expr='/*mnist*', force=opt['f'])
+    d = loaddir(opt['i'], expr='/*', force=opt['f'])
 
+d['plw'] = d.dw**2/2/d.f
 
 plt.figure(1)
 plt.clf()
