@@ -59,7 +59,7 @@ setup(t=4, s=opt['s'], gpus=gpus)
 model = models.FederatedModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
 dataset, augment = getattr(loader, opt['dataset'])(opt)
-loaders = loader.get_loaders(dataset, augment, opt)
+loaders = loader.get_federated_loaders(dataset, augment, opt)
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
                             'f','v', 'augment', 't', 'nw',

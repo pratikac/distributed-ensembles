@@ -74,12 +74,12 @@ def get_loaders(d, transforms, opt):
             tr.append(get_inf_iterator(xy, transforms, opt['b'], nw=0, shuffle=True))
         return [dict(train=tr[i],val=tv,test=tv,train_full=trf,idx=idxs[i]) for i in xrange(opt['n'])]
 
-# def get_federated_loaders(d, transforms, opt):
-#     if not opt['augment']:
-#         transforms = lambda x: x
+def get_federated_loaders(d, transforms, opt):
+    if not opt['augment']:
+        transforms = lambda x: x
 
-#     tv = get_iterator(d['val'], lambda x:x, opt['b'], nw=opt['nw'], shuffle=False)
-#     assert
+    tv = get_iterator(d['val'], lambda x:x, opt['b'], nw=opt['nw'], shuffle=False)
+
 
 
 def mnist(opt):
