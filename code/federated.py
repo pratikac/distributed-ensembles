@@ -54,7 +54,7 @@ ngpus = th.cuda.device_count()
 gpus = [i if opt['g'] >= ngpus else opt['g'] for i in xrange(ngpus)]
 if not opt['gpus'] == '':
     gpus = json.loads(opt['gpus'])
-setup(t=8, s=opt['s'], gpus=gpus)
+setup(t=4, s=opt['s'], gpus=gpus)
 
 if opt['ni'] < 0:
     opt['ni'] = ngpus*10 if opt['dataset'] == 'mnist' else ngpus
@@ -121,7 +121,7 @@ def train(e):
         meters.add(dict(f=np.mean(fs), top1=np.mean(errs), top5=np.mean(errs5), dt=_dt))
 
         mm = meters.value()
-        if opt['l'] and bi % 25 == 0 and bi > 0:
+        if opt['l'] and bi > 0:
             s = dict(i=bi + e*maxb, e=e, train=True)
             s.update(**mm)
             logger.info('[LOG] ' + json.dumps(s))
