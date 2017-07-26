@@ -442,14 +442,15 @@ class FederatedModel(nn.Module):
         n = self.n
 
         self.ids = [gpus[i%len(gpus)] for i in xrange(n)]
-        self.w = [globals()[opt['m']](opt) for i in xrange(n)]
+        self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in xrange(n)]
 
         self.refid = self.ids[0]
-        self.ref = globals()[opt['m']](opt)
+        self.ref = globals()[opt['m']](opt).cuda(self.refid)
 
     def forward(self, ids, xs, ys):
         xs = [[a] for a in xs]
-        ws = [self.w[ii].cuda(self.ids[ii]) for ii in ids]
+        # ws = [self.w[ii].cuda(self.ids[ii]) for ii in ids]
+        ws = [self.w[ii] for ii in ids]
         assert len(ids) == len(xs) and len(xs) == len(ys)
         fs = parallel_apply(ws, xs)
         return fs
@@ -457,8 +458,8 @@ class FederatedModel(nn.Module):
     def backward(self, ids, fs):
         f = sum(gather(fs, self.refid))
         f.backward()
-        for ii in ids:
-            self.w[ii].cpu()
+        # for ii in ids:
+        #     self.w[ii].cpu()
 
     def train(self):
         self.ref.train()

@@ -26,7 +26,7 @@ opt = add_args([
 ['-b', 128, 'batch_size'],
 ['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
-['--optim', 'ProxSGD', 'Parle | SGD | EntropySGD | ProxSGD'],
+['--optim', 'Parle', 'Parle'],
 ['-d', -1., 'dropout'],
 ['--l2', -1., 'ell-2'],
 ['-B', 100, 'max epochs'],
@@ -50,6 +50,8 @@ opt = add_args([
 if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
 
+opt['ni'] = min(opt['ni'], opt['n'])
+
 ngpus = th.cuda.device_count()
 gpus = [i if opt['g'] >= ngpus else opt['g'] for i in xrange(ngpus)]
 if not opt['gpus'] == '':
@@ -67,8 +69,12 @@ build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
 logger = create_logger(opt)
 pprint(opt)
 
+params = dict(t=0, gdot=opt['gdot']/len(loaders['train_full']))
+opt.update(**params)
+optimizer = getattr(optim, opt['optim'])(model, config=opt)
+
 def train(e):
-    #optimizer.config['lr'] = lrschedule(opt, e, logger)
+    optimizer.config['lr'] = lrschedule(opt, e, logger)
     model.train()
 
     n, ni = opt['n'], opt['ni']
@@ -108,14 +114,13 @@ def train(e):
                 return fs, errs, errs5
             return feval
 
-        # fs, errs, errs5 = optimizer.step(helper())
-        fs, errs, errs5 = helper()()
+        fs, errs, errs5 = optimizer.step(helper())
 
         _dt = timer() - _dt
         meters.add(dict(f=np.mean(fs), top1=np.mean(errs), top5=np.mean(errs5), dt=_dt))
 
         mm = meters.value()
-        if opt['l'] and bi % 25 ==0 and bi > 0:
+        if opt['l'] and bi % 25 == 0 and bi > 0:
             s = dict(i=bi + e*maxb, e=e, train=True)
             s.update(**mm)
             logger.info('[LOG] ' + json.dumps(s))
