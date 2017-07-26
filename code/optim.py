@@ -29,7 +29,7 @@ class Parle(object):
     def __init__(self, model, config = {}):
 
         defaults = dict(lr=0.1, mom=0.9, damp=0, llr=0.1,
-                l2=0, L=25, beta1=0.0,
+                l2=0, L=25, beta1=0.75,
                 g0=0.01, g1=1.0, gdot=0.5,
                 g0m=1, g1m=10,
                 v=False,
