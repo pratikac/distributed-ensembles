@@ -252,25 +252,22 @@ class ProxSGD(object):
 
 def copy_from_params(m, fw, fdw):
     # from model to fw
+    fw.zero_()
+    fdw.zero_()
     idx = 0
-
     for w in m.parameters():
         n = w.numel()
         fw[idx:idx+n].copy_(w.data.view(-1))
         if not w.grad is None:
             fdw[idx:idx+n].copy_(w.grad.data.view(-1))
-        else:
-            fdw[idx:idx+n].zero_()
-        idx += w.data.numel()
+        idx += n
 
 def copy_to_params(m, fw):
     # to model from fw
     idx = 0
-
     for w in m.parameters():
-        n = w.numel()
-        w.data.copy_(fw[idx:idx+n].view_as(w.data))
-        idx += w.data.numel()
+        w.data.copy_(fw[idx:idx+w.nelement()])
+        idx += w.nelement()
 
 class FederatedParle(object):
     def __init__(self, model, config = {}):
@@ -305,11 +302,8 @@ class FederatedParle(object):
         if not 'w' in state:
             t = th.FloatTensor(N)
 
-            state['w'] = [t.clone() for i in xrange(n)]
-            state['dw'] = [t.clone() for i in xrange(n)]
             state['r'] = t.clone()
-
-            for k in ['mdw', 'cmdw', 'wc', 'dwc']:
+            for k in ['w', 'dw', 'mdw', 'cmdw', 'wc', 'dwc']:
                 state[k] = [t.clone() for i in xrange(n)]
 
             for i in xrange(n):
@@ -330,7 +324,7 @@ class FederatedParle(object):
 
         def feval():
             for i in xrange(n):
-                dw[i].zero_()
+                model.w[i].zero_grad()
                 copy_to_params(model.w[i], w[i])
 
             cfs, cerrs, cerrs5 = closure()
@@ -347,11 +341,9 @@ class FederatedParle(object):
 
         if c['L'] == 0:
             fs, errs, errs5 = feval()
-            for i in xrange(n):
-                copy_from_params(model.w[i], w[i], dw[i])
-            print fs
 
         for i in xrange(n):
+            copy_from_params(model.w[i], w[i], dw[i])
             wc[i].copy_(w[i])
             dwc[i].copy_(dw[i])
 
@@ -379,7 +371,7 @@ class FederatedParle(object):
             else:
                 dw[i].copy_(dwc[i])
 
-            dw[i].add_(rho, wc[i]-r[i])
+            dw[i].add_(rho, wc[i]-r)
 
             if c['mom'] > 0:
                 mdw[i].mul_(c['mom']).add_(dw[i])
