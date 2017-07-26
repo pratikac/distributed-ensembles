@@ -50,14 +50,13 @@ opt = add_args([
 if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
 
-opt['ni'] = min(opt['ni'], opt['n'])
-
 ngpus = th.cuda.device_count()
 gpus = [i if opt['g'] >= ngpus else opt['g'] for i in xrange(ngpus)]
 if not opt['gpus'] == '':
     gpus = json.loads(opt['gpus'])
-setup(t=4, s=opt['s'], gpus=gpus)
+setup(t=opt['nw'], s=opt['s'], gpus=gpus)
 
+opt['ni'] = ngpus*10 if opt['dataset'] == 'mnist' else ngpus
 model = models.FederatedModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
 dataset, augment = getattr(loader, opt['dataset'])(opt)
@@ -108,9 +107,9 @@ def train(e):
                         err[iii], errs[iii] = clerr(yhs[iii].data, ys[iii].data, topk=(1,5))
                     model.backward(ids, f)
 
-                fs += [f[iii].data[0] for iii in xrange(nids)]
-                errs += err
-                errs5 += err5
+                    fs += [f[iii].data[0] for iii in xrange(nids)]
+                    errs += err
+                    errs5 += err5
                 return fs, errs, errs5
             return feval
 
