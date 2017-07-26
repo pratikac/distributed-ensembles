@@ -104,7 +104,7 @@ class Parle(object):
 
         g = min(c['g0']*(1+c['gdot'])**state['t'], c['g0m'])
         rho = min(c['g1']*(1+c['gdot'])**state['t'], c['g1m'])
-        mom = (state['t']-1)/(state['t']+2)
+        mom = c['mom']
 
         for l in xrange(c['L']):
             fs, errs, errs5 = feval()
