@@ -74,14 +74,6 @@ def get_loaders(d, transforms, opt):
             tr.append(get_inf_iterator(xy, transforms, opt['b'], nw=0, shuffle=True))
         return [dict(train=tr[i],val=tv,test=tv,train_full=trf,idx=idxs[i]) for i in xrange(opt['n'])]
 
-def get_federated_loaders(d, transforms, opt):
-    if not opt['augment']:
-        transforms = lambda x: x
-
-    tv = get_iterator(d['val'], lambda x:x, opt['b'], nw=opt['nw'], shuffle=False)
-
-
-
 def mnist(opt):
     loc = '/local2/pratikac/mnist'
     d1, d2 = datasets.MNIST(loc, train=True), datasets.MNIST(loc, train=False)
@@ -252,3 +244,48 @@ def ptb(opt):
         'val': batchify(c.valid, opt['b']),
         'test': batchify(c.test, opt['b'])}
     return  c, r, get_batch
+
+
+class FederatedSampler(object):
+    def __init__(self, opt, d, idxs, transforms):
+        self.transforms = transforms
+        self.n = opt['n']
+        self.N = d['train']['x'].size(0)
+        self.b = opt['b']
+        self.d = d
+
+        self.idxs = th.Tensor(self.n, self.N).zero_()
+        for i, idx in enumerate(idxs):
+            for ii in idx:
+                self.idxs[i][ii] = 1.0
+
+        self.sidx = th.arange(0, self.b).long()
+
+    def next(self, i):
+        self.sidx.copy_(th.multinomial(self.idxs[i], self.b, True))
+        x = th.index_select(self.d['train']['x'], 0, self.sidx)
+        y = th.index_select(self.d['train']['y'], 0, self.sidx).squeeze()
+        for i in xrange(self.b):
+            x[i] = self.transforms(x[i])
+        return x,y
+
+def get_federated_loaders(d, transforms, opt):
+    if not opt['augment']:
+        transforms = lambda x: x
+
+    trf = get_iterator(d['train'], transforms, opt['b'], nw=opt['nw'], shuffle=True)
+    tv = get_iterator(d['val'], lambda x:x, opt['b'], nw=opt['nw'], shuffle=False)
+
+    n = opt['n']
+    N = d['train']['x'].size(0)
+    idxs = []
+    for i in xrange(n):
+        fs = (i / float(n)) % 1.0
+        ns, ne = int(N*fs), int(N*(fs+opt['frac']))
+        if ne <= N:
+            idxs.append(th.arange(ns,ne).long())
+        else:
+            ne = ne % N
+            idxs.append(th.cat((th.arange(ns,N), th.arange(0,ne))).long())
+
+    return dict(train=FederatedSampler(opt, d, idxs, transforms), val=tv, train_full=trf)

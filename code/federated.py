@@ -67,28 +67,113 @@ build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
 logger = create_logger(opt)
 pprint(opt)
 
-for e in xrange(1):
-    n = opt['n']
+def train(e):
+    #optimizer.config['lr'] = lrschedule(opt, e, logger)
+    model.train()
 
-    x = th.randn(opt['b'], 1, 28, 28)
-    y = next(loaders[0]['val'].__iter__())[1]
-
+    n, ni = opt['n'], opt['ni']
     gids = deepcopy(model.ids)
 
-    for b in xrange(10):
-        ns = range(opt['n'])
-        ni = opt['ni']
-        for ids in [ns[i:i+ni] for i in xrange(0, opt['n'], ni)]:
+    meters = AverageMeters(['f', 'top1', 'top5', 'dt'])
 
-            xs, ys, fs = [], [], []
-            for ii in ids:
-                t1, t2 = Variable(x.cuda(gids[ii])), Variable(y.cuda(gids[ii]))
-                xs.append(t1)
-                ys.append(t2)
+    bsz = opt['b']
+    maxb = int(len(loaders['train_full'])*opt['frac'])
+    ns = range(n)
 
-            yhs = model.forward(ids, xs, ys)
-            for iii, ii in enumerate(ids):
-                fs.append(criterion.cuda(gids[ii])(yhs[iii], ys[iii]))
-            model.backward(ids, fs)
+    for bi in xrange(maxb):
+        _dt = timer()
+        def helper():
+            def feval():
 
-            print(ids)
+                fs, errs, errs5 = [0]*n, [0]*n, [0]*n
+
+                for ids in [ns[i:i+ni] for i in xrange(0, opt['n'], opt['ni'])]:
+                    nids = len(ids)
+                    xs, ys = [None]*nids, [None]*nids
+                    f, err, err5 = [0]*nids, [0]*nids, [0]*nids
+
+                    for iii, ii in enumerate(ids):
+                        x,y = loaders['train'].next(ii)
+                        xs[iii], ys[iii] = Variable(x.cuda(gids[ii])), Variable(y.cuda(gids[ii]))
+
+                    yhs = model(ids, xs, ys)
+                    for iii, ii in enumerate(ids):
+                        f[iii] = criterion.cuda(gids[ii])(yhs[iii], ys[iii])
+                        err[iii], errs[iii] = clerr(yhs[iii].data, ys[iii].data, topk=(1,5))
+                    model.backward(ids, f)
+
+                fs += [f[iii].data[0] for iii in xrange(nids)]
+                errs += err
+                errs5 += err5
+                return fs, errs, errs5
+            return feval
+
+        # fs, errs, errs5 = optimizer.step(helper())
+        fs, errs, errs5 = helper()()
+
+        _dt = timer() - _dt
+        meters.add(dict(f=np.mean(fs), top1=np.mean(errs), top5=np.mean(errs5), dt=_dt))
+
+        mm = meters.value()
+        if opt['l'] and bi % 25 ==0 and bi > 0:
+            s = dict(i=bi + e*maxb, e=e, train=True)
+            s.update(**mm)
+            logger.info('[LOG] ' + json.dumps(s))
+
+        bif = int(5/mm['dt'])+1
+        if bi % bif == 0 and bi > 0:
+            print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f %2.2f%% %2.2f%%'))%(_dt,
+                e,bi,maxb, mm['f'], mm['top1'], mm['top5']))
+
+    mm = meters.value()
+    if opt['l']:
+        s = dict(e=e, i=0, train=True)
+        s.update(**mm)
+        logger.info('[SUMMARY] ' + json.dumps(s))
+        logger.info('')
+
+    print((color('blue', '++[%2d] %2.4f %2.2f%% %2.2f%% [%2.2fs]'))% (e, mm['f'], mm['top1'], mm['top5'], meters.m['dt'].sum))
+    print()
+
+def val(e):
+    n = opt['n']
+    ids = deepcopy(model.ids)
+
+    rid = model.refid
+    val_model = model.w[0] if n == 1 else model.ref
+
+    if (not 'imagenet' in opt['dataset']):
+        dry_feed(val_model, loaders[0]['train_full'], mid=rid)
+
+    model.eval()
+    meters = AverageMeters(['f', 'top1', 'top5'])
+
+    for bi, (x,y) in enumerate(loaders['val']):
+        bsz = x.size(0)
+
+        xc,yc = Variable(x.cuda(rid), volatile=True), \
+                Variable(y.squeeze().cuda(rid), volatile=True)
+
+        yh = val_model(xc)
+        f = criterion.cuda(rid)(yh, yc).data[0]
+        err, err5 = clerr(yh.data, yc.data, topk=(1,5))
+        meters.add(dict(f=f, top1=err, top5=err5))
+
+        mm = meters.value()
+        if bi % 100 == 0 and bi > 0:
+            print((color('red', '*[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, bi, \
+                    mm['f'], mm['top1'], mm['top5']))
+
+    mm = meters.value()
+    if opt['l']:
+        s = dict(e=e, i=0, value=True)
+        s.update(**mm)
+        logger.info('[SUMMARY] ' + json.dumps(s))
+        logger.info('')
+
+    print((color('red', '**[%2d] %2.4f %2.4f%% %2.4f%%\n'))%(e, mm['f'], mm['top1'], mm['top5']))
+    print('')
+
+for e in xrange(opt['e'], opt['B']):
+    train(e)
+    val(e)
