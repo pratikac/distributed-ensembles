@@ -249,3 +249,151 @@ class ProxSGD(object):
         r.add_(-1, dr)
 
         return fs, errs, errs5
+
+def copy_from_params(m, fw, fdw):
+    # from model to fw
+    idx = 0
+
+    for w in m.parameters():
+        n = w.numel()
+        fw[idx:idx+n].copy_(w.data.view(-1))
+        if not w.grad is None:
+            fdw[idx:idx+n].copy_(w.grad.data.view(-1))
+        else:
+            fdw[idx:idx+n].zero_()
+        idx += w.data.numel()
+
+def copy_to_params(m, fw):
+    # to model from fw
+    idx = 0
+
+    for w in m.parameters():
+        n = w.numel()
+        w.data.copy_(fw[idx:idx+n].view_as(w.data))
+        idx += w.data.numel()
+
+class FederatedParle(object):
+    def __init__(self, model, config = {}):
+
+        defaults = dict(lr=0.1, mom=0.9, damp=0, llr=0.1,
+                l2=0, L=25, beta1=0.0,
+                g0=0.01, g1=1.0, gdot=0.5,
+                g0m=1, g1m=10,
+                v=False,
+                t=0)
+        defaults.update(**config)
+
+        self.model = model
+        self.config = deepcopy(defaults)
+        self.state = dict(N=models.num_parameters(self.model.ref),
+                    t=0,
+                    n = len(self.model.w),
+                    ids = deepcopy(self.model.ids))
+
+    def step(self, closure=None):
+        assert closure is not None, 'attach closure for FederatedParle'
+
+        state = self.state
+        c = self.config
+        model = self.model
+
+        N = state['N']
+        n = state['n']
+        ids = state['ids']
+        rid = model.refid
+
+        if not 'w' in state:
+            t = th.FloatTensor(N)
+
+            state['w'] = [t.clone() for i in xrange(n)]
+            state['dw'] = [t.clone() for i in xrange(n)]
+            state['r'] = t.clone()
+
+            for k in ['mdw', 'cmdw', 'wc', 'dwc']:
+                state[k] = [t.clone() for i in xrange(n)]
+
+            for i in xrange(n):
+                copy_from_params(model.w[i], state['w'][i], state['dw'][i])
+
+            for i in xrange(n):
+                state['mdw'][i].zero_()
+                state['cmdw'][i].zero_()
+
+        state['t'] += 1
+
+        w, dw = state['w'], state['dw']
+        mdw = state['mdw']
+        cmdw = state['cmdw']
+
+        wc, dwc = state['wc'], state['dwc']
+        r = state['r']
+
+        def feval():
+            for i in xrange(n):
+                dw[i].zero_()
+                copy_to_params(model.w[i], w[i])
+
+            cfs, cerrs, cerrs5 = closure()
+
+            for i in xrange(n):
+                copy_from_params(model.w[i], w[i], dw[i])
+
+            if c['l2'] > 0:
+                for i in xrange(n):
+                    dw[i].add_(c['l2'], w[i])
+            return cfs, cerrs, cerrs5
+
+        fs, errs, errs5 = [None]*n, [None]*n, [None]*n
+
+        if c['L'] == 0:
+            fs, errs, errs5 = feval()
+            for i in xrange(n):
+                copy_from_params(model.w[i], w[i], dw[i])
+            print fs
+
+        for i in xrange(n):
+            wc[i].copy_(w[i])
+            dwc[i].copy_(dw[i])
+
+        g = min(c['g0']*(1+c['gdot'])**state['t'], c['g0m'])
+        rho = min(c['g1']*(1+c['gdot'])**state['t'], c['g1m'])
+
+        for l in xrange(c['L']):
+            fs, errs, errs5 = feval()
+            for i in xrange(n):
+                dw[i].add_(g, w[i]-wc[i])
+
+                if c['mom'] > 0:
+                    cmdw[i].mul_(c['mom']).add_(dw[i])
+                    dw[i].add_(c['mom'], cmdw[i])
+
+                w[i].add_(-c['llr'], dw[i])
+
+        r.zero_()
+        for i in xrange(n):
+            r.add_(1/float(n), w[i])
+
+        for i in xrange(n):
+            if c['L'] > 0:
+                dw[i].copy_(wc[i]-w[i])
+            else:
+                dw[i].copy_(dwc[i])
+
+            dw[i].add_(rho, wc[i]-r[i])
+
+            if c['mom'] > 0:
+                mdw[i].mul_(c['mom']).add_(dw[i])
+                dw[i].add_(c['mom'], mdw[i])
+
+            w[i].copy_(wc[i])
+            w[i].add_(-c['lr'], dw[i])
+
+        r.zero_()
+        for i in xrange(n):
+            r.add_(1/float(n), w[i])
+
+        for i in xrange(n):
+            copy_to_params(model.w[i], w[i])
+        copy_to_params(model.ref, r)
+
+        return fs, errs, errs5

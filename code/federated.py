@@ -26,7 +26,7 @@ opt = add_args([
 ['-b', 128, 'batch_size'],
 ['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
-['--optim', 'Parle', 'Parle'],
+['--optim', 'FederatedParle', 'FederatedParle'],
 ['-d', -1., 'dropout'],
 ['--l2', -1., 'ell-2'],
 ['-B', 100, 'max epochs'],
@@ -57,6 +57,8 @@ if not opt['gpus'] == '':
 setup(t=opt['nw'], s=opt['s'], gpus=gpus)
 
 opt['ni'] = ngpus*10 if opt['dataset'] == 'mnist' else ngpus
+opt['ni'] = min(opt['ni'], opt['n'])
+
 model = models.FederatedModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
 dataset, augment = getattr(loader, opt['dataset'])(opt)
@@ -89,7 +91,6 @@ def train(e):
         _dt = timer()
         def helper():
             def feval():
-
                 fs, errs, errs5 = [0]*n, [0]*n, [0]*n
 
                 for ids in [ns[i:i+ni] for i in xrange(0, opt['n'], opt['ni'])]:
@@ -144,10 +145,9 @@ def val(e):
     ids = deepcopy(model.ids)
 
     rid = model.refid
-    val_model = model.w[0] if n == 1 else model.ref
+    model.ref.cuda(rid)
 
-    if (not 'imagenet' in opt['dataset']):
-        dry_feed(val_model, loaders['train_full'], mid=rid)
+    dry_feed(model.ref, loaders['train_full'], mid=rid)
 
     model.eval()
     meters = AverageMeters(['f', 'top1', 'top5'])
@@ -158,7 +158,7 @@ def val(e):
         xc,yc = Variable(x.cuda(rid), volatile=True), \
                 Variable(y.squeeze().cuda(rid), volatile=True)
 
-        yh = val_model(xc)
+        yh = model.ref(xc)
         f = criterion.cuda(rid)(yh, yc).data[0]
         err, err5 = clerr(yh.data, yc.data, topk=(1,5))
         meters.add(dict(f=f, top1=err, top5=err5))
