@@ -148,7 +148,7 @@ def val(e):
     val_model = model.w[0] if n == 1 else model.ref
 
     if (not 'imagenet' in opt['dataset']):
-        dry_feed(val_model, loaders[0]['train_full'], mid=rid)
+        dry_feed(val_model, loaders['train_full'], mid=rid)
 
     model.eval()
     meters = AverageMeters(['f', 'top1', 'top5'])
