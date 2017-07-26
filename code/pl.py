@@ -57,7 +57,7 @@ loaders_lbsz = loader.get_loaders(dataset, augment, opt)
 data_lbsz = loaders_lbsz[0]['train_full']
 opt['b'] = b
 
-model = getattr(models, opt['m'])(opt).cuda()
+model = getattr(models, opt['m'])(opt).cuda(gid)
 if opt['g'] >= ngpus:
     model = nn.DataParallel(model)
 
