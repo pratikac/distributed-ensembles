@@ -33,7 +33,7 @@ opt = add_args([
 ['--lr', 0.1, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
 ['-n', 1, 'num replicas'],
-['--ni', 1, 'num replicas to execute simultaneously'],
+['--ni', -1, 'num replicas to execute simultaneously'],
 ['-L', 25, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
 ['--g1', 1.0, 'elastic gamma'],
@@ -54,10 +54,11 @@ ngpus = th.cuda.device_count()
 gpus = [i if opt['g'] >= ngpus else opt['g'] for i in xrange(ngpus)]
 if not opt['gpus'] == '':
     gpus = json.loads(opt['gpus'])
-setup(t=opt['nw'], s=opt['s'], gpus=gpus)
+setup(t=8, s=opt['s'], gpus=gpus)
 
-opt['ni'] = ngpus*10 if opt['dataset'] == 'mnist' else ngpus
-opt['ni'] = min(opt['ni'], opt['n'])
+if opt['ni'] < 0:
+    opt['ni'] = ngpus*10 if opt['dataset'] == 'mnist' else ngpus
+    opt['ni'] = min(opt['ni'], opt['n'])
 
 model = models.FederatedModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()

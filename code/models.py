@@ -435,6 +435,8 @@ class FederatedModel(nn.Module):
     def __init__(self, opt, gpus):
         super(FederatedModel, self).__init__()
 
+        self.all_cuda = False
+
         self.gpus = gpus
 
         self.t = 0
@@ -442,24 +444,31 @@ class FederatedModel(nn.Module):
         n = self.n
 
         self.ids = [gpus[i%len(gpus)] for i in xrange(n)]
-        self.w = [globals()[opt['m']](opt) for i in xrange(n)]
-
         self.refid = self.ids[0]
-        self.ref = globals()[opt['m']](opt)
+
+        if self.all_cuda:
+            self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in xrange(n)]
+            self.ref = globals()[opt['m']](opt).cuda(self.refid)
+        else:
+            self.w = [globals()[opt['m']](opt) for i in xrange(n)]
+            self.ref = globals()[opt['m']](opt)
 
     def forward(self, ids, xs, ys):
         xs = [[a] for a in xs]
-        ws = [self.w[ii].cuda(self.ids[ii]) for ii in ids]
-        ws = [self.w[ii] for ii in ids]
-        assert len(ids) == len(xs) and len(xs) == len(ys)
+        if self.all_cuda:
+            ws = [self.w[ii] for ii in ids]
+        else:
+            ws = [self.w[ii].cuda(self.ids[ii]) for ii in ids]
+
         fs = parallel_apply(ws, xs)
         return fs
 
     def backward(self, ids, fs):
         f = sum(gather(fs, self.refid))
         f.backward()
-        for ii in ids:
-            self.w[ii].cpu()
+        if not self.all_cuda:
+            for ii in ids:
+                self.w[ii].cpu()
 
     def train(self):
         self.ref.train()
