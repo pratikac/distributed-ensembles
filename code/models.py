@@ -50,7 +50,8 @@ class mnistfc(nn.Module):
             nn.Linear(c,10))
 
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
-        # print(s)
+        if opt['v']:
+            print(s)
         logging.info(s)
 
     def forward(self, x):
@@ -84,7 +85,7 @@ class lenet(nn.Module):
             nn.Linear(c3,10))
 
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
-        #print(s)
+        print(s)
         logging.info(s)
 
     def forward(self, x):
@@ -92,7 +93,7 @@ class lenet(nn.Module):
 
 class lenets(lenet):
     name = 'lenets'
-    def __init__(self, opt, c1=5, c2=10, c3=64):
+    def __init__(self, opt, c1=8, c2=16, c3=32):
         super(lenets, self).__init__(opt, c1, c2, c3)
 
 class lenetl(lenet):

@@ -32,6 +32,7 @@ opt = add_args([
 ['-B', 100, 'max epochs'],
 ['--lr', 0.1, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
+['--Ls', '', 'schedule for Langevin steps'],
 ['-n', 1, 'num replicas'],
 ['-L', 25, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
@@ -63,7 +64,7 @@ criterion = nn.CrossEntropyLoss()
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
                             'f','v', 'augment', 't', 'nw',
-                            'save','e','l2','r', 'lr'])
+                            'save','e','l2','r', 'lr', 'Ls', 'b', 'g0', 'g1'])
 logger = create_logger(opt)
 pprint(opt)
 
@@ -74,8 +75,27 @@ params = dict(t=0, gdot=opt['gdot']/len(loaders[0]['train_full']))
 opt.update(**params)
 optimizer = getattr(optim, opt['optim'])(model, config=opt)
 
+def Lschedule(opt, e, logger):
+    if opt['Ls'] == '':
+        opt['L'] = json.dumps([[opt['B'], opt['L']]])
+
+    Ls = json.loads(opt['Ls'])
+
+    idx = len(Ls)-1
+    for i in xrange(len(Ls)):
+        if e < Ls[i][0]:
+            idx = i
+            break
+    L = Ls[idx][1]
+
+    print('[L]: ', L)
+    if opt['l'] and logger:
+        logger.info('[L] ' + json.dumps({'L': L}))
+    return L
+
 def train(e):
     optimizer.config['lr'] = lrschedule(opt, e, logger)
+    optimizer.config['L'] = Lschedule(opt, e, logger)
     model.train()
 
     n = opt['n']

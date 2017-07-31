@@ -188,8 +188,6 @@ class ProxSGD(object):
         ids = state['ids']
         rid = model.refid
 
-        assert c['L'] != 0, 'L is zero'
-
         if not 'w' in state:
             t = th.FloatTensor(N)
 
@@ -224,23 +222,15 @@ class ProxSGD(object):
         dwc.copy_(dw)
 
         fs, errs, errs5 = None, None, None
-        l = 0
-        stop = False
-        while not stop:
-            fs, errs, errs5 = feval()
 
-            if c['v']:
-                print dw.norm()
+        for l in xrange(c['L']):
+            fs, errs, errs5 = feval()
 
             dw.add_(g, w-wc)
 
             mdw.mul_(mom).add_(1-c['damp'], dw)
             dw.add_(mom, mdw)
             w.add_(-c['lr'], dw)
-
-            if l > c['L']:
-                stop = True
-            l += 1
 
         mdr.mul_(mom).add_(1-c['damp'], wc-w)
         dr.zero_()
