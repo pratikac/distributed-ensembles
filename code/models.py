@@ -140,7 +140,7 @@ class allcnn(nn.Module):
             View(num_classes))
 
         s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
-        #print(s)
+        print(s)
         logging.info(s)
 
     def forward(self, x):
@@ -148,7 +148,8 @@ class allcnn(nn.Module):
 
 class allcnns(allcnn):
     name = 'allcnns'
-    def __init__(self, opt, c1=32, c2=64):
+    def __init__(self, opt, c1=16, c2=32):
+        opt['d'] = 0.0
         super(allcnns, self).__init__(opt, c1, c2)
 
 class allcnnl(allcnn):

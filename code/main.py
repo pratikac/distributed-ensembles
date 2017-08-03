@@ -39,12 +39,13 @@ opt = add_args([
 ['--g1', 1.0, 'elastic gamma'],
 ['--gdot', 0.5, 'gamma dot'],
 ['-s', 42, 'seed'],
-['--nw', 4, 'workers'],
+['--nw', 0, 'workers'],
 ['-l', False, 'log'],
 ['-f', 10, 'print freq'],
 ['-v', False, 'verbose'],
 ['-r', '', 'resume ckpt'],
-['--save', False, 'save ckpt'],
+['--save', False, 'save best ckpt'],
+['--save_all', False, 'save all ckpt'],
 ])
 
 # if opt['n'] > 1:
@@ -61,6 +62,7 @@ setup(t=4, s=opt['s'], gpus=gpus)
 
 model = models.ReplicateModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
+best_model = dict()
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
                             'f','v', 'augment', 't', 'nw',
@@ -77,7 +79,7 @@ optimizer = getattr(optim, opt['optim'])(model, config=opt)
 
 def Lschedule(opt, e, logger):
     if opt['Ls'] == '':
-        opt['L'] = json.dumps([[opt['B'], opt['L']]])
+        opt['Ls'] = json.dumps([[opt['B'], opt['L']]])
 
     Ls = json.loads(opt['Ls'])
 
@@ -159,6 +161,7 @@ def train(e):
 
     print((color('blue', '++[%2d] %2.4f %2.2f%% %2.2f%% [%2.2fs]'))% (e, mm['f'], mm['top1'], mm['top5'], meters.m['dt'].sum))
     print()
+    return mm
 
 def val(e):
     n = opt['n']
@@ -198,45 +201,60 @@ def val(e):
 
     print((color('red', '**[%2d] %2.4f %2.4f%% %2.4f%%\n'))%(e, mm['f'], mm['top1'], mm['top5']))
     print('')
+    return mm
 
-def save_ensemble(e):
-    if not opt['save']:
-        return
+def save_model(e, mm):
+    global best_model
 
-    loc = opt.get('o','/local2/pratikac/results')
-    dirloc = os.path.join(loc, opt['m'], opt['filename'])
-    if not os.path.isdir(dirloc):
-        os.makedirs(dirloc)
+    def helper(fn):
+        loc = opt.get('o','/local2/pratikac/results')
+        dirloc = os.path.join(loc, opt['m'], opt['filename'])
+        if not os.path.isdir(dirloc):
+            os.makedirs(dirloc)
 
-    r = gitrev(opt)
-    meta = dict(SHA=r[0], STATUS=r[1], DIFF=r[2])
-    th.save(dict(
-            meta = meta,
-            opt=json.dumps(opt),
-            ref=model.ref.state_dict(),
-            w = [model.w[i].state_dict() for i in xrange(opt['n'])],
-            e=e,
-            t=optimizer.state['t']),
-            os.path.join(dirloc, str(e) + '.pz'))
+        r = gitrev(opt)
+        meta = dict(SHA=r[0], STATUS=r[1], DIFF=r[2])
+        th.save(dict(
+                meta = meta,
+                opt=json.dumps(opt),
+                ref=model.ref.state_dict(),
+                w = [model.w[i].state_dict() for i in xrange(opt['n'])],
+                e=e,
+                t=optimizer.state['t']),
+                os.path.join(dirloc, fn))
 
-if not opt['r'] == '':
-    print('Loading model from: ', opt['r'])
-    d = th.load(opt['r'])
-    model.ref.load_state_dict(d['ref'])
-    model.ref = model.ref.cuda(model.refid)
-    for i in xrange(opt['n']):
-        model.w[i].load_state_dict(d['w'][i])
-        model.w[i] = model.w[i].cuda(model.ids[i])
-    print('[Loaded model, check validation error]')
-    val(d['e'])
+    if opt['save_all']:
+        helper(str(e) + '.pz')
+        k = 'top1'
+        if not k in best_model or mm[k] <= best_model[k]:
+            helper('best.pz')
 
-    opt['e'] = d['e'] + 1
+    if opt['save']:
+        k = 'top1'
+        if not k in best_model or mm[k] <= best_model[k]:
+            helper('best.pz')
 
-    print('[Loading new optimizer]')
-    params = dict(t=d['t'], gdot=opt['gdot']/len(loaders[0]['train_full']))
-    optimizer = getattr(optim, opt['optim'])(model, config = opt.update(**params))
+    best_model = deepcopy(mm)
 
-for e in xrange(opt['e'], opt['B']):
-    train(e)
-    val(e)
-    save_ensemble(e)
+if __name__ == '__main__':
+    if not opt['r'] == '':
+        print('Loading model from: ', opt['r'])
+        d = th.load(opt['r'])
+        model.load_state_dict(d['model'])
+        print('[Loaded model, check validation error]')
+        val(d['e'])
+
+        opt['e'] = d['e'] + 1
+
+        print('[Loading new optimizer]')
+        params = dict(t=d['t'], gdot=opt['gdot']/len(loaders[0]['train_full']))
+        opt.update(**params)
+        optimizer = getattr(optim, opt['optim'])(model, config=opt)
+
+    ef = 1 if opt['L'] > 1 else 10
+    for e in xrange(opt['e'], opt['B']):
+        train(e)
+        if e % ef == 0:
+            mm = val(e)
+            save_model(e, mm)
+    val(opt['B'])
