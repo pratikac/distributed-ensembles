@@ -40,12 +40,12 @@ class mnistfc(nn.Module):
             View(784),
             nn.Dropout(0.2),
             nn.Linear(784,c),
-            nn.ReLU(inplace=True),
             nn.BatchNorm1d(c),
+            nn.ReLU(inplace=True),
             nn.Dropout(opt['d']),
             nn.Linear(c,c),
-            nn.ReLU(inplace=True),
             nn.BatchNorm1d(c),
+            nn.ReLU(inplace=True),
             nn.Dropout(opt['d']),
             nn.Linear(c,10))
 
