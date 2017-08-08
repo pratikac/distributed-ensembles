@@ -11,22 +11,22 @@ L = 1
 n = 3
 maxb = 500
 
-# opt = dict(b=bsz, frac=1.0, n=3, m='mnist', augment=True, nw=1)
-# d, augment = getattr(loader, opt['m'])(opt)
+opt = dict(b=bsz, frac=1.0, n=3, m='mnist', augment=True, nw=1)
+d, augment = getattr(loader, opt['m'])(opt)
 
-# class DS(object):
-#     def __init__(self, d):
-#         self.d = d
-#         self.n = d['x'].size(0)
+class DS(object):
+    def __init__(self, d):
+        self.d = d
+        self.n = d['x'].size(0)
 
-#     def __getitem__(self, idx):
-#         i = idx % self.n
-#         return (self.d['x'][i], self.d['y'][i])
+    def __getitem__(self, idx):
+        i = idx % self.n
+        return (self.d['x'][i], self.d['y'][i])
 
-#     def __len__(self):
-#         return 2**20
+    def __len__(self):
+        return 2**20
 
-# ds = [th.utils.data.DataLoader(DS(d['train']), batch_size=opt['b']) for _ in xrange(opt['n'])]
+ds = [th.utils.data.DataLoader(DS(d['train']), batch_size=opt['b']) for _ in xrange(opt['n'])]
 
 # for e in xrange(100):
 #     for bi, (x,y) in enumerate(ds[0]):
@@ -54,3 +54,12 @@ n = models.num_parameters(m)
 t = th.FloatTensor(n)
 x, dx = t.clone(), t.clone()
 optim.flatten_params(m, x, dx)
+
+for bi, (xi,ti) in enumerate(ds[0]):
+    tih = m(xi)
+    f = nn.CrossEntropyLoss()(tih, ti)
+    f.backward()
+    
+    print dx[:25].view(5,5)
+    print list(m.parameters())[0].grad[0]
+
