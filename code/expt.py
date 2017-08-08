@@ -1,6 +1,8 @@
 import argparse, math, random
 import torch as th
 import torchnet as tnt
+from torch import nn
+from torch.autograd import Variable
 
 import loader, models, optim
 import numpy as np
@@ -56,10 +58,21 @@ x, dx = t.clone(), t.clone()
 optim.flatten_params(m, x, dx)
 
 for bi, (xi,ti) in enumerate(ds[0]):
+    xi, ti = Variable(xi), Variable(ti)
+    m.zero_grad()
     tih = m(xi)
     f = nn.CrossEntropyLoss()(tih, ti)
     f.backward()
-    
+    break
+
+optim.flatten_params(m, x, dx)
+for bi, (xi,ti) in enumerate(ds[0]):
+    xi, ti = Variable(xi), Variable(ti)
+    m.zero_grad()
+    tih = m(xi)
+    f = nn.CrossEntropyLoss()(tih, ti)
+    f.backward()
+
     print dx[:25].view(5,5)
     print list(m.parameters())[0].grad[0]
-
+    raw_input()

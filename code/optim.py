@@ -16,10 +16,8 @@ def flatten_params(m, fw, fdw):
         n = w.numel()
         fw[idx:idx+n].copy_(w.data.view(-1))
         w.data.set_(fw.storage(), idx, w.size())
-        if w.grad is None:
-            w._grad = Variable(w.data.clone())
-            w._grad.data.set_(fdw.storage(), idx, w.size())
-        else:
+
+        if w.grad is not None:
             fdw[idx:idx+n].copy_(w.grad.data.view(-1))
             w.grad.data.set_(fdw.storage(), idx, w.size())
 
@@ -62,6 +60,9 @@ class Parle(object):
             state['dw'] = [t.clone().cuda(ids[i]) for i in xrange(n)]
             state['r'], state['dr'] = t.clone().cuda(rid), t.clone().cuda(rid)
 
+            # fake feed
+            closure()
+
             for i in xrange(n):
                 flatten_params(model.w[i], state['w'][i], state['dw'][i])
             flatten_params(model.ref, state['r'], state['dr'])
@@ -84,8 +85,7 @@ class Parle(object):
         r, dr = state['r'], state['dr']
 
         def feval():
-            for i in xrange(n):
-                dw[i].zero_()
+            model.zero_grad()
             cfs, cerrs, cerrs5 = closure()
             if c['l2'] > 0:
                 for i in xrange(n):
@@ -196,6 +196,9 @@ class ProxSGD(object):
             state['r'], state['dr'], state['mdr'] = t.clone().cuda(rid), \
                         t.clone().cuda(rid), t.clone().cuda(rid)
 
+            # fake feed
+            closure()
+
             flatten_params(model.w[0], state['w'], state['dw'])
             flatten_params(model.ref, state['r'], state['dr'])
 
@@ -204,7 +207,6 @@ class ProxSGD(object):
 
         state['t'] += 1
         g = min(c['g0']*(1+c['gdot'])**state['t'], 1)
-        #mom = (state['t']-1)/(state['t']+2)
         mom = c['mom']
 
         w, dw, mdw = state['w'], state['dw'], state['mdw']
@@ -212,7 +214,7 @@ class ProxSGD(object):
         r, dr, mdr = state['r'], state['dr'], state['mdr']
 
         def feval():
-            dw.zero_()
+            model.zero_grad()
             cfs, cerrs, cerrs5 = closure()
             if c['l2'] > 0:
                 dw.add_(c['l2'], w)

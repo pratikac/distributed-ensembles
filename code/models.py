@@ -433,6 +433,10 @@ class ReplicateModel(nn.Module):
         for i in xrange(self.n):
             self.w[i].eval()
 
+    def zero_grad(self):
+        for i in xrange(self.n):
+            self.w[i].zero_grad()
+
 class FederatedModel(nn.Module):
     def __init__(self, opt, gpus):
         super(FederatedModel, self).__init__()
