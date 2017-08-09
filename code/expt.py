@@ -14,7 +14,8 @@ n = 3
 maxb = 500
 
 opt = dict(b=bsz, frac=1.0, n=3, m='mnist', augment=True, nw=1)
-d, augment = getattr(loader, opt['m'])(opt)
+
+# d, augment = getattr(loader, opt['m'])(opt)
 
 # class DS(object):
 #     def __init__(self, d):
@@ -76,12 +77,3 @@ d, augment = getattr(loader, opt['m'])(opt)
 #     print dx[:25].view(5,5)
 #     print list(m.parameters())[0].grad[0]
 #     raw_input()
-
-
-import torch.distributed as dist
-
-opt['rank'] = 0
-
-# Use address of one of the machines
-dist.init_process_group(backend='gloo',
-    init_method='tcp://localhost:23456', rank=opt['rank'], world_size=4)
