@@ -9,6 +9,18 @@ import exptutils
 import numpy as np
 from torch.nn.parallel import scatter, parallel_apply, gather
 
+def get_num_classes(opt):
+    num_classes = 0
+    if opt['dataset'] == 'cifar10' or opt['dataset'] == 'svhn':
+        num_classes = 10
+    elif opt['dataset'] == 'cifar100':
+        num_classes = 100
+    elif opt['dataset'] == 'imagenet':
+        num_classes = 1000
+    else:
+        assert False, 'Unknown dataset: %s'%opt['dataset']
+    return num_classes
+
 class View(nn.Module):
     def __init__(self,o):
         super(View, self).__init__()
@@ -112,10 +124,7 @@ class allcnn(nn.Module):
         if opt['l2'] < 0:
             opt['l2'] = 1e-3
 
-        if opt['dataset'] == 'cifar10' or opt['dataset'] == 'svhn':
-            num_classes = 10
-        elif opt['dataset'] == 'cifar100':
-            num_classes = 100
+        num_classes = get_num_classes(opt)
 
         def convbn(ci,co,ksz,s=1,pz=0):
             return nn.Sequential(
@@ -197,14 +206,7 @@ class wideresnet(nn.Module):
 
         d, depth, widen = opt['d'], opt['depth'], opt['widen']
 
-        if opt['dataset'] == 'cifar10' or opt['dataset'] == 'svhn':
-            num_classes = 10
-        elif opt['dataset'] == 'cifar100':
-            num_classes = 100
-        elif opt['dataset'] == 'imagenet':
-            num_classes = 1000
-        else:
-            assert False, 'Unknown dataset '+ opt['dataset']
+        num_classes = get_num_classes(opt)
 
         nc = [16, 16*widen, 32*widen, 64*widen]
         assert (depth-4)%6 == 0, 'Incorrect depth'
@@ -333,6 +335,60 @@ class alexnet(nn.Module):
     def forward(self, x):
         return self.m(x)
 
+class densenet121(nn.Module):
+    name = 'densenet121'
+    def __init__(self, opt):
+        super(densenet121, self).__init__()
+        opt['l2'] = 1e-4
+
+        self.m = thv.models.densenet121(num_classes=get_num_classes(opt))
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+class densenet169(nn.Module):
+    name = 'densenet169'
+    def __init__(self, opt):
+        super(densenet169, self).__init__()
+        opt['l2'] = 1e-4
+
+        self.m = thv.models.densenet169(num_classes=get_num_classes(opt))
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+class densenet201(nn.Module):
+    name = 'densenet201'
+    def __init__(self, opt):
+        super(densenet201, self).__init__()
+        opt['l2'] = 1e-4
+
+        self.m = thv.models.densenet201(num_classes=get_num_classes(opt))
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+class squeezenet(nn.Module):
+    name = 'squeezenet'
+    def __init__(self, opt):
+        super(squeezenet, self).__init__()
+
+        self.m = getattr(thv.models, 'squeezenet1_1')(num_classes=get_num_classes(opt))
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
 
 class cattable_t(nn.Module):
     def __init__(self, m1, m2):
@@ -346,7 +402,7 @@ class densenet(nn.Module):
     name = 'densenet'
 
     @staticmethod
-    def bottleneck(nc, gr):
+    def bottleneck(nc, gr, p):
         ic = 4*gr
         h = nn.Sequential(
             nn.BatchNorm2d(nc),
@@ -354,24 +410,28 @@ class densenet(nn.Module):
             nn.Conv2d(nc, ic, kernel_size=1, bias=False),
             nn.BatchNorm2d(ic),
             nn.ReLU(True),
-            nn.Conv2d(ic, gr, kernel_size=3, padding=1, bias=False)
+            nn.Conv2d(ic, gr, kernel_size=3, padding=1, bias=False),
+            nn.Dropout(p),
             )
         return cattable_t(h, nn.Sequential())
 
     @staticmethod
-    def single_layer(nc, gr):
+    def basic(nc, gr, p):
         h = nn.Sequential(
             nn.BatchNorm2d(nc),
             nn.ReLU(True),
-            nn.Conv2d(nc, gr, kernel_size=3, padding=1, bias=False))
+            nn.Conv2d(nc, gr, kernel_size=3, padding=1, bias=False),
+            nn.Dropout(p)
+            )
         return cattable_t(h, nn.Sequential())
 
     @staticmethod
-    def transition(nci, nco):
+    def transition(nci, nco, p):
         return nn.Sequential(
             nn.BatchNorm2d(nci),
             nn.ReLU(True),
             nn.Conv2d(nci, nco, kernel_size=1, bias=False),
+            nn.Dropout(p),
             nn.AvgPool2d(2))
 
     def __init__(self, opt):
@@ -382,11 +442,12 @@ class densenet(nn.Module):
         reduction = opt.get('reduction', 0.5)
         is_bottleneck = True
 
-        if opt['dataset'] == 'cifar10' or opt['dataset'] == 'svhn':
-            num_classes = 10
-        elif opt['dataset'] == 'cifar100':
-            num_classes = 100
+        assert not opt['dataset'] == 'imagenet', 'Use specific densenet from torchvision, \
+                this is only meant for cifar'
+        num_classes = get_num_classes(opt)
 
+        if opt['d'] < 0:
+            opt['d'] = 0.0
         if opt['l2'] < 0:
             opt['l2'] = 1e-4
 
@@ -400,18 +461,18 @@ class densenet(nn.Module):
             ncis.append(nc)
             ncos.append(int(math.floor(nc*reduction)))
 
-        def denseblock(nc, gr, nblk, is_bottleneck):
-            wl = self.bottleneck if is_bottleneck else self.single_layer
-            ls = [wl(nc + i*gr, gr) for i in xrange(nblk)]
+        def denseblock(nc, gr, nblk, blk, p):
+            wl = self.bottleneck if is_bottleneck else self.basic
+            ls = [wl(nc + i*gr, gr, p) for i in xrange(nblk)]
             return nn.Sequential(*ls)
 
         self.m = nn.Sequential(
                 nn.Conv2d(3, ncis[0], kernel_size=3, padding=1, bias=False),
-                denseblock(ncis[0], gr, nblk, is_bottleneck),
-                self.transition(ncis[1], ncos[1]),
-                denseblock(ncos[1], gr, nblk, is_bottleneck),
-                self.transition(ncis[2], ncos[2]),
-                denseblock(ncos[2], gr, nblk, is_bottleneck),
+                denseblock(ncis[0], gr, nblk, is_bottleneck, opt['d']),
+                self.transition(ncis[1], ncos[1], opt['d']),
+                denseblock(ncos[1], gr, nblk, is_bottleneck, opt['d']),
+                self.transition(ncis[2], ncos[2], opt['d']),
+                denseblock(ncos[2], gr, nblk, is_bottleneck, opt['d']),
                 nn.BatchNorm2d(ncis[3]),
                 nn.ReLU(True),
                 nn.AvgPool2d(8),
@@ -419,7 +480,6 @@ class densenet(nn.Module):
                 nn.Linear(ncis[3], num_classes)
             )
 
-        # initialize weights
         for m in self.m.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0]*m.kernel_size[1]*m.out_channels
@@ -436,7 +496,6 @@ class densenet(nn.Module):
 
     def forward(self, x):
         return self.m(x)
-
 
 class LSTM(nn.Module):
     def __init__(self, opt):
