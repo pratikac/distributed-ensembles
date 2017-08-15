@@ -13,7 +13,7 @@ L = 1
 n = 3
 maxb = 500
 
-opt = dict(b=bsz, frac=1.0, n=3, m='mnist', augment=True, nw=1)
+opt = dict(b=bsz, frac=1.0, n=3, m='mnist', augment=True, nw=1, dataset='cifar10')
 d, augment = getattr(loader, opt['m'])(opt)
 
 class DS(object):
@@ -51,28 +51,28 @@ ds = [th.utils.data.DataLoader(DS(d['train']), batch_size=opt['b']) for _ in xra
 #                     x,y = next(iters[i])
 #         print e, bi
 
-m = models.lenet({'d': 0.25})
-n = models.num_parameters(m)
-t = th.FloatTensor(n)
-x, dx = t.clone(), t.clone()
-optim.flatten_params(m, x, dx)
+# m = models.lenet({'d': 0.25})
+# n = models.num_parameters(m)
+# t = th.FloatTensor(n)
+# x, dx = t.clone(), t.clone()
+# optim.flatten_params(m, x, dx)
 
-for bi, (xi,ti) in enumerate(ds[0]):
-    xi, ti = Variable(xi), Variable(ti)
-    m.zero_grad()
-    tih = m(xi)
-    f = nn.CrossEntropyLoss()(tih, ti)
-    f.backward()
-    break
+# for bi, (xi,ti) in enumerate(ds[0]):
+#     xi, ti = Variable(xi), Variable(ti)
+#     m.zero_grad()
+#     tih = m(xi)
+#     f = nn.CrossEntropyLoss()(tih, ti)
+#     f.backward()
+#     break
 
-optim.flatten_params(m, x, dx)
-for bi, (xi,ti) in enumerate(ds[0]):
-    xi, ti = Variable(xi), Variable(ti)
-    m.zero_grad()
-    tih = m(xi)
-    f = nn.CrossEntropyLoss()(tih, ti)
-    f.backward()
+# optim.flatten_params(m, x, dx)
+# for bi, (xi,ti) in enumerate(ds[0]):
+#     xi, ti = Variable(xi), Variable(ti)
+#     m.zero_grad()
+#     tih = m(xi)
+#     f = nn.CrossEntropyLoss()(tih, ti)
+#     f.backward()
 
-    print dx[:25].view(5,5)
-    print list(m.parameters())[0].grad[0]
-    raw_input()
+#     print dx[:25].view(5,5)
+#     print list(m.parameters())[0].grad[0]
+#     raw_input()

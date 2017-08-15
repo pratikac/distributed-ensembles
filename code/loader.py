@@ -86,7 +86,7 @@ def mnist(opt):
 
 def cifar_helper(opt, s):
     loc = '/local2/pratikac/cifar/'
-    if 'resnet' in opt['m']:
+    if 'resnet' in opt['m'] or 'densenet' in opt['m']:
         d1 = np.load(loc+s+'-train.npz')
         d2 = np.load(loc+s+'-test.npz')
     else:

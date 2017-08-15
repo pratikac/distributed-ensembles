@@ -9,7 +9,6 @@ import exptutils
 import numpy as np
 from torch.nn.parallel import scatter, parallel_apply, gather
 
-
 class View(nn.Module):
     def __init__(self,o):
         super(View, self).__init__()
@@ -333,6 +332,111 @@ class alexnet(nn.Module):
 
     def forward(self, x):
         return self.m(x)
+
+
+class cattable_t(nn.Module):
+    def __init__(self, m1, m2):
+        super(cattable_t, self).__init__()
+        self.m1, self.m2 = m1, m2
+
+    def forward(self, x):
+        return th.cat((self.m1(x), self.m2(x)), 1)
+
+class densenet(nn.Module):
+    name = 'densenet'
+
+    @staticmethod
+    def bottleneck(nc, gr):
+        ic = 4*gr
+        h = nn.Sequential(
+            nn.BatchNorm2d(nc),
+            nn.ReLU(True),
+            nn.Conv2d(nc, ic, kernel_size=1, bias=False),
+            nn.BatchNorm2d(ic),
+            nn.ReLU(True),
+            nn.Conv2d(ic, gr, kernel_size=3, padding=1, bias=False)
+            )
+        return cattable_t(h, nn.Sequential())
+
+    @staticmethod
+    def single_layer(nc, gr):
+        h = nn.Sequential(
+            nn.BatchNorm2d(nc),
+            nn.ReLU(True),
+            nn.Conv2d(nc, gr, kernel_size=3, padding=1, bias=False))
+        return cattable_t(h, nn.Sequential())
+
+    @staticmethod
+    def transition(nci, nco):
+        return nn.Sequential(
+            nn.BatchNorm2d(nci),
+            nn.ReLU(True),
+            nn.Conv2d(nci, nco, kernel_size=1, bias=False),
+            nn.AvgPool2d(2))
+
+    def __init__(self, opt):
+        super(densenet, self).__init__()
+
+        gr = opt.get('gr', 12)
+        depth = opt.get('depth', 100)
+        reduction = opt.get('reduction', 0.5)
+        is_bottleneck = True
+
+        if opt['dataset'] == 'cifar10' or opt['dataset'] == 'svhn':
+            num_classes = 10
+        elif opt['dataset'] == 'cifar100':
+            num_classes = 100
+
+        if opt['l2'] < 0:
+            opt['l2'] = 1e-4
+
+        nblk = (depth-4) // 3
+        if is_bottleneck:
+            nblk //= 2
+
+        ncis, ncos = [2*gr], [2*gr]
+        for i in xrange(1,4):
+            nc = ncos[-1] + nblk*gr
+            ncis.append(nc)
+            ncos.append(int(math.floor(nc*reduction)))
+
+        def denseblock(nc, gr, nblk, is_bottleneck):
+            wl = self.bottleneck if is_bottleneck else self.single_layer
+            ls = [wl(nc + i*gr, gr) for i in xrange(nblk)]
+            return nn.Sequential(*ls)
+
+        self.m = nn.Sequential(
+                nn.Conv2d(3, ncis[0], kernel_size=3, padding=1, bias=False),
+                denseblock(ncis[0], gr, nblk, is_bottleneck),
+                self.transition(ncis[1], ncos[1]),
+                denseblock(ncos[1], gr, nblk, is_bottleneck),
+                self.transition(ncis[2], ncos[2]),
+                denseblock(ncos[2], gr, nblk, is_bottleneck),
+                nn.BatchNorm2d(ncis[3]),
+                nn.ReLU(True),
+                nn.AvgPool2d(8),
+                View(ncis[3]),
+                nn.Linear(ncis[3], num_classes)
+            )
+
+        # initialize weights
+        for m in self.m.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0]*m.kernel_size[1]*m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2./n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                m.bias.data.zero_()
+
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
 
 class LSTM(nn.Module):
     def __init__(self, opt):
