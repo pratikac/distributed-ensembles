@@ -65,7 +65,7 @@ criterion = nn.CrossEntropyLoss()
 best_model = dict()
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
-                            'f','v', 'augment', 't', 'nw',
+                            'f','v', 'augment', 't', 'nw', 'save_all', 'd',
                             'save','e','l2','r', 'lr', 'Ls', 'b', 'g0', 'g1'])
 logger = create_logger(opt)
 pprint(opt)
