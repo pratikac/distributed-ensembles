@@ -424,11 +424,13 @@ class ReplicateModel(nn.Module):
                 fs[i].backward()
 
     def train(self):
+        super(ReplicateModel, self).train()
         self.ref.train()
         for i in xrange(self.n):
             self.w[i].train()
 
     def eval(self):
+        super(ReplicateModel, self).eval()
         self.ref.eval()
         for i in xrange(self.n):
             self.w[i].eval()
@@ -477,10 +479,12 @@ class FederatedModel(nn.Module):
                 self.w[ii].cpu()
 
     def train(self):
+        super(FederatedModel, self).train()
         self.ref.train()
         for i in xrange(self.n):
             self.w[i].train()
 
     def eval(self):
+        super(FederatedModel, self).eval()
         self.ref.eval()
         self.ref.cuda(self.refid)
