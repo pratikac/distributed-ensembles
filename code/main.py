@@ -70,30 +70,15 @@ build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
 logger = create_logger(opt)
 pprint(opt)
 
-dataset, augment = getattr(loader, opt['dataset'])(opt)
-loaders = loader.get_loaders(dataset, augment, opt)
+if not opt['dataset'] == 'imagenet':
+    dataset, augment = getattr(loader, opt['dataset'])(opt)
+    loaders = loader.get_loaders(dataset, augment, opt)
+else:
+    loaders = getattr(loader, opt['dataset'])(opt)
 
 params = dict(t=0, gdot=opt['gdot']/len(loaders[0]['train_full']))
 opt.update(**params)
 optimizer = getattr(optim, opt['optim'])(model, config=opt)
-
-def Lschedule(opt, e, logger):
-    if opt['Ls'] == '':
-        opt['Ls'] = json.dumps([[opt['B'], opt['L']]])
-
-    Ls = json.loads(opt['Ls'])
-
-    idx = len(Ls)-1
-    for i in xrange(len(Ls)):
-        if e < Ls[i][0]:
-            idx = i
-            break
-    L = Ls[idx][1]
-
-    print('[L]: ', L)
-    if opt['l'] and logger:
-        logger.info('[L] ' + json.dumps({'L': L}))
-    return L
 
 def train(e):
     optimizer.config['lr'] = lrschedule(opt, e, logger)

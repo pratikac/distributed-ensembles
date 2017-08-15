@@ -180,37 +180,13 @@ def imagenet(opt, only_train=False):
         batch_size=bsz, shuffle=False,
         num_workers=nw, pin_memory=True)
 
-    return train_loader, val_loader, val_loader, train_loader
+    ids = th.arange(0, len(train_loader)).long()
 
-def tiny_imagenet(opt, only_train=False):
-    loc = '/local2/pratikac/tiny_imagenet'
-    bsz, nw = opt['b'], 4
-
-    traindir = os.path.join(loc, 'train')
-    valdir = os.path.join(loc, 'val')
-
-    input_transform = []
-
-    normalize = [transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])]
-
-
-    train_folder = datasets.ImageFolder(traindir, transforms.Compose([
-            transforms.RandomHorizontalFlip()] + normalize))
-    train_loader = th.utils.data.DataLoader(
-        train_folder,
-        batch_size=bsz, shuffle=True,
-        num_workers=nw, pin_memory=True)
-
-    val_folder = datasets.ImageFolder(valdir, transforms.Compose(
-            input_transform + normalize))
-    val_loader = th.utils.data.DataLoader(
-        val_folder,
-        batch_size=bsz, shuffle=False,
-        num_workers=nw, pin_memory=True)
-
-    return train_loader, val_loader, val_loader, train_loader
+    return [dict(train=train_loader,
+                val=val_loader,
+                test=val_loader,
+                train_full=train_loader,
+                idx=ids) for i in xrange(opt['n'])]
 
 # PTB
 class Dictionary(object):
