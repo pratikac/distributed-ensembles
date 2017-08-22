@@ -64,6 +64,15 @@ if opt['g'] >= ngpus:
 criterion = nn.CrossEntropyLoss().cuda(gid)
 optimizer = th.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, nesterov=True)
 
+# populate buffers before flattening params
+for bi, (x,y) in enumerate(data):
+    xc,yc = Variable(x.cuda(gid)), Variable(y.squeeze().cuda(gid))
+    model.zero_grad()
+    yh = model(xc)
+    f = criterion(yh, yc)
+    f.backward()
+    break
+
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
                             'f','v', 'augment', 't', 'nw', 'frac', 'nw', 'frac', 'd', 'b',
                             'save','e','l2','r', 'lr', 'bb', 'full_grad'])
