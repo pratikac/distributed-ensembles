@@ -1,5 +1,5 @@
 import torch as th
-import torchvision.cvtransforms as T
+#import torchvision.cvtransforms as T
 import torchvision.transforms as transforms
 from torchvision import datasets
 import torchnet as tnt
@@ -8,7 +8,7 @@ import torchnet as tnt
 
 import numpy as np
 import os, sys, pdb, math, random
-import cv2
+#import cv2
 import scipy.io as sio
 
 class InfDS(object):
@@ -75,7 +75,7 @@ def get_loaders(d, transforms, opt):
         return [dict(train=tr[i],val=tv,test=tv,train_full=trf,idx=idxs[i]) for i in xrange(opt['n'])]
 
 def mnist(opt):
-    loc = '/local2/pratikac/mnist'
+    loc = '/home/pratikac/local2/pratikac/mnist'
     d1, d2 = datasets.MNIST(loc, train=True), datasets.MNIST(loc, train=False)
 
     d = {'train': {'x': d1.train_data.view(-1,1,28,28).float(), 'y': d1.train_labels},
@@ -85,7 +85,7 @@ def mnist(opt):
     return d, lambda x: x
 
 def cifar_helper(opt, s):
-    loc = '/local2/pratikac/cifar/'
+    loc = '~/local2/pratikac/cifar/'
     if 'resnet' in opt['m'] or 'densenet' in opt['m']:
         d1 = np.load(loc+s+'-train.npz')
         d2 = np.load(loc+s+'-test.npz')
@@ -102,7 +102,7 @@ def cifar_helper(opt, s):
         lambda x: x.numpy().astype(np.float32),
         lambda x: x.transpose(1,2,0),
         T.RandomHorizontalFlip(),
-        T.Pad(4, cv2.BORDER_REFLECT),
+        T.Pad(4, 2),
         T.RandomCrop(sz),
         lambda x: x.transpose(2,0,1),
         th.from_numpy])
@@ -116,7 +116,7 @@ def cifar100(opt):
     return cifar_helper(opt, 'cifar100')
 
 def svhn(opt):
-    loc = '/local2/pratikac/svhn/'
+    loc = '~/local2/pratikac/svhn/'
 
     d1 = sio.loadmat(loc + 'train_32x32.mat')
     d2 = sio.loadmat(loc + 'extra_32x32.mat')
@@ -144,7 +144,7 @@ def svhn(opt):
         lambda x: x.numpy().astype(np.float32),
         lambda x: x.transpose(1,2,0),
         T.RandomHorizontalFlip(),
-        T.Pad(4, cv2.BORDER_REFLECT),
+        T.Pad(4, 2),
         T.RandomCrop(sz),
         lambda x: x.transpose(2,0,1),
         th.from_numpy])
@@ -152,7 +152,7 @@ def svhn(opt):
     return d, lambda x: x
 
 def imagenet(opt, only_train=False):
-    loc = '/local2/pratikac/imagenet'
+    loc = '~/local2/pratikac/imagenet'
     bsz, nw = opt['b'], 4
 
     traindir = os.path.join(loc, 'train')
@@ -205,7 +205,7 @@ class Dictionary(object):
 
 class Corpus(object):
     def __init__(self):
-        path = '/local2/pratikac/ptb'
+        path = '~/local2/pratikac/ptb'
         self.dictionary = Dictionary()
         self.train = self.tokenize(os.path.join(path, 'ptb.train.txt'))
         self.valid = self.tokenize(os.path.join(path, 'ptb.valid.txt'))
