@@ -179,7 +179,7 @@ def val(e):
 
     mm = meters.value()
     if opt['l']:
-        s = dict(e=e, i=0, value=True)
+        s = dict(e=e, i=0, val=True)
         s.update(**mm)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
