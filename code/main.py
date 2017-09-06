@@ -17,7 +17,7 @@ import pdb, glob, sys, gc, time
 from copy import deepcopy
 
 opt = add_args([
-['-o', '~/local2/pratikac/results', 'output'],
+['-o', '/home/%s/local2/pratikac/results'%os.environ['USER'], 'output'],
 ['-m', 'lenet', 'lenet | mnistfc | allcnn | wrn* | resnet*'],
 ['--dataset', 'mnist', 'mnist | cifar10 | cifar100 | svhn | imagenet'],
 ['-g', 3, 'gpu idx'],
