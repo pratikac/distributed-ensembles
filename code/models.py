@@ -193,7 +193,7 @@ class wideresnet(nn.Module):
 
     @staticmethod
     def netblock(nl, ci, co, blk, s, p=0.):
-        ls = [blk(i==0 and ci or co, co, i==0 and s or 1, p) for i in xrange(nl)]
+        ls = [blk(i==0 and ci or co, co, i==0 and s or 1, p) for i in range(nl)]
         return nn.Sequential(*ls)
 
     def __init__(self, opt):
@@ -456,14 +456,14 @@ class densenet(nn.Module):
             nblk //= 2
 
         ncis, ncos = [2*gr], [2*gr]
-        for i in xrange(1,4):
+        for i in range(1,4):
             nc = ncos[-1] + nblk*gr
             ncis.append(nc)
             ncos.append(int(math.floor(nc*reduction)))
 
         def denseblock(nc, gr, nblk, blk, p):
             wl = self.bottleneck if is_bottleneck else self.basic
-            ls = [wl(nc + i*gr, gr, p) for i in xrange(nblk)]
+            ls = [wl(nc + i*gr, gr, p) for i in range(nblk)]
             return nn.Sequential(*ls)
 
         self.m = nn.Sequential(
@@ -558,13 +558,13 @@ class ReplicateModel(nn.Module):
         self.n = opt['n']
         n = self.n
 
-        self.ids = [gpus[i%len(gpus)] for i in xrange(n)]
-        self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in xrange(n)]
+        self.ids = [gpus[i%len(gpus)] for i in range(n)]
+        self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in range(n)]
         self.refid = self.ids[0]
         self.ref = globals()[opt['m']](opt).cuda(self.refid)
 
         if n == 1 and opt['g'] >= len(gpus):
-            print 'Using DataParallel...'
+            print('Using DataParallel...')
             self.w[0] = nn.DataParallel(self.w[0], device_ids=gpus)
             self.ref = nn.DataParallel(self.ref, device_ids=gpus)
 
@@ -574,7 +574,7 @@ class ReplicateModel(nn.Module):
             return parallel_apply(self.w, xs)
 
         yhs = [None]*self.n
-        for i in xrange(self.n):
+        for i in range(self.n):
             yhs[i] = self.w[i](xs[i])
         return yhs
 
@@ -583,21 +583,21 @@ class ReplicateModel(nn.Module):
             f = sum(gather(fs, self.refid))
             f.backward()
         else:
-            for i in xrange(self.n):
+            for i in range(self.n):
                 fs[i].backward()
 
     def train(self):
         self.ref.train()
-        for i in xrange(self.n):
+        for i in range(self.n):
             self.w[i].train()
 
     def eval(self):
         self.ref.eval()
-        for i in xrange(self.n):
+        for i in range(self.n):
             self.w[i].eval()
 
     def zero_grad(self):
-        for i in xrange(self.n):
+        for i in range(self.n):
             self.w[i].zero_grad()
 
 class FederatedModel(nn.Module):
@@ -612,14 +612,14 @@ class FederatedModel(nn.Module):
         self.n = opt['n']
         n = self.n
 
-        self.ids = [gpus[i%len(gpus)] for i in xrange(n)]
+        self.ids = [gpus[i%len(gpus)] for i in range(n)]
         self.refid = self.ids[0]
 
         if self.all_cuda:
-            self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in xrange(n)]
+            self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in range(n)]
             self.ref = globals()[opt['m']](opt).cuda(self.refid)
         else:
-            self.w = [globals()[opt['m']](opt) for i in xrange(n)]
+            self.w = [globals()[opt['m']](opt) for i in range(n)]
             self.ref = globals()[opt['m']](opt)
 
     def forward(self, ids, xs, ys):
@@ -641,7 +641,7 @@ class FederatedModel(nn.Module):
 
     def train(self):
         self.ref.train()
-        for i in xrange(self.n):
+        for i in range(self.n):
             self.w[i].train()
 
     def eval(self):

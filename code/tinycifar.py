@@ -17,7 +17,7 @@ import pdb, glob, sys, gc, time
 from copy import deepcopy
 
 opt = add_args([
-['-o', '/home/%s/local2/pratikac/results'%os.environ['USER'], 'output'],
+['-o', '/local2/pratikac/results', 'output'],
 ['-m', 'lenet', 'lenet | mnistfc | allcnn | wrn* | resnet*'],
 ['--dataset', 'mnist', 'mnist | cifar10 | cifar100 | svhn | imagenet'],
 ['-g', 3, 'gpu idx'],
@@ -32,7 +32,6 @@ opt = add_args([
 ['-B', 100, 'max epochs'],
 ['--lr', 0.1, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
-['--Ls', '', 'schedule for Langevin steps'],
 ['-n', 1, 'num replicas'],
 ['-L', 25, 'sgld iterations'],
 ['--g0', 0.01, 'SGLD gamma'],
@@ -55,7 +54,7 @@ if opt['L'] > 0 or opt['l']:
     opt['f'] = 1
 
 ngpus = th.cuda.device_count()
-gpus = [i if opt['g'] >= ngpus else opt['g'] for i in range(ngpus)]
+gpus = [i if opt['g'] >= ngpus else opt['g'] for i in xrange(ngpus)]
 if not opt['gpus'] == '':
     gpus = json.loads(opt['gpus'])
 setup(t=4, s=opt['s'], gpus=gpus)
@@ -65,16 +64,13 @@ criterion = nn.CrossEntropyLoss()
 best_model = dict()
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
-                            'f','v', 'augment', 't', 'nw', 'save_all', 'd',
+                            'f','v', 'augment', 't', 'nw',
                             'save','e','l2','r', 'lr', 'Ls', 'b', 'g0', 'g1'])
 logger = create_logger(opt)
 pprint(opt)
 
-if not opt['dataset'] == 'imagenet':
-    dataset, augment = getattr(loader, opt['dataset'])(opt)
-    loaders = loader.get_loaders(dataset, augment, opt)
-else:
-    loaders = getattr(loader, opt['dataset'])(opt)
+dataset, augment = getattr(loader, opt['dataset'])(opt)
+loaders = loader.get_loaders(dataset, augment, opt)
 
 params = dict(t=0, gdot=opt['gdot']/len(loaders[0]['train_full']))
 opt.update(**params)
@@ -82,7 +78,6 @@ optimizer = getattr(optim, opt['optim'])(model, config=opt)
 
 def train(e):
     optimizer.config['lr'] = lrschedule(opt, e, logger)
-    optimizer.config['L'] = Lschedule(opt, e, logger)
     model.train()
 
     n = opt['n']
@@ -92,16 +87,16 @@ def train(e):
 
     bsz = opt['b']
     maxb = int(len(loaders[0]['train_full'])*opt['frac'])
-    iters = [loaders[i]['train'].__iter__() for i in range(n)]
+    iters = [loaders[i]['train'].__iter__() for i in xrange(n)]
 
-    for bi in range(maxb):
+    for bi in xrange(maxb):
         _dt = timer()
         def helper():
             def feval():
                 xs, ys = [None]*n, [None]*n
                 fs, errs, errs5 = [0]*n, [0]*n, [0]*n
 
-                for i in range(n):
+                for i in xrange(n):
                     try:
                         x, y = next(iters[i])
                     except StopIteration:
@@ -113,12 +108,12 @@ def train(e):
                     xs[i], ys[i] =  Variable(x.cuda(ids[i])), Variable(y.squeeze().cuda(ids[i]))
 
                 yhs = model(xs, ys)
-                for i in range(n):
+                for i in xrange(n):
                     fs[i] = criterion.cuda(ids[i])(yhs[i], ys[i])
                     errs[i], errs5[i] = clerr(yhs[i].data, ys[i].data, topk=(1,5))
                 model.backward(fs)
 
-                fs = [fs[i].data[0] for i in range(n)]
+                fs = [fs[i].data[0] for i in xrange(n)]
                 return fs, errs, errs5
             return feval
 
@@ -179,7 +174,7 @@ def val(e):
 
     mm = meters.value()
     if opt['l']:
-        s = dict(e=e, i=0, val=True)
+        s = dict(e=e, i=0, value=True)
         s.update(**mm)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
@@ -203,7 +198,7 @@ def save_model(e, mm):
                 meta = meta,
                 opt=json.dumps(opt),
                 ref=model.ref.state_dict(),
-                w = [model.w[i].state_dict() for i in range(opt['n'])],
+                w = [model.w[i].state_dict() for i in xrange(opt['n'])],
                 e=e,
                 t=optimizer.state['t']),
                 os.path.join(dirloc, fn))
@@ -237,7 +232,7 @@ if __name__ == '__main__':
         optimizer = getattr(optim, opt['optim'])(model, config=opt)
 
     ef = 1 if opt['L'] > 1 else 10
-    for e in range(opt['e'], opt['B']):
+    for e in xrange(opt['e'], opt['B']):
         train(e)
         if e % ef == 0:
             mm = val(e)

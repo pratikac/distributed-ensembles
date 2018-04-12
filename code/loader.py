@@ -54,13 +54,13 @@ def get_loaders(d, transforms, opt):
 
     if opt['frac'] > 1-1e-12:
         return [dict(train=trinff,val=tv,test=tv,train_full=trf,
-                idx=th.arange(0,d['train']['x'].size(0))) for i in xrange(opt['n'])]
+                idx=th.arange(0,d['train']['x'].size(0))) for i in range(opt['n'])]
     else:
         n = opt['n']
         N = d['train']['x'].size(0)
         tr = []
         idxs = []
-        for i in xrange(n):
+        for i in range(n):
             fs = (i / float(n)) % 1.0
             ns, ne = int(N*fs), int(N*(fs+opt['frac']))
             x, y = d['train']['x'], d['train']['y']
@@ -74,7 +74,7 @@ def get_loaders(d, transforms, opt):
                 xy = {  'x': th.cat((x[ns:], x[:ne])),
                         'y': th.cat((y[ns:], y[:ne]))}
             tr.append(get_inf_iterator(xy, transforms, opt['b'], nw=0, shuffle=True))
-        return [dict(train=tr[i],val=tv,test=tv,train_full=trf,idx=idxs[i]) for i in xrange(opt['n'])]
+        return [dict(train=tr[i],val=tv,test=tv,train_full=trf,idx=idxs[i]) for i in range(opt['n'])]
 
 def mnist(opt):
     loc = home + '/local2/pratikac/mnist'
@@ -188,7 +188,7 @@ def imagenet(opt, only_train=False):
                 val=val_loader,
                 test=val_loader,
                 train_full=train_loader,
-                idx=ids) for i in xrange(opt['n'])]
+                idx=ids) for i in range(opt['n'])]
 
 # PTB
 class Dictionary(object):
@@ -273,7 +273,7 @@ class FederatedSampler(object):
         self.sidx.copy_(th.multinomial(self.idxs[i], self.b, True))
         x = th.index_select(self.d['train']['x'], 0, self.sidx)
         y = th.index_select(self.d['train']['y'], 0, self.sidx).squeeze()
-        for i in xrange(self.b):
+        for i in range(self.b):
             x[i] = self.transforms(x[i])
         return x,y
 
@@ -287,7 +287,7 @@ def get_federated_loaders(d, transforms, opt):
     n = opt['n']
     N = d['train']['x'].size(0)
     idxs = []
-    for i in xrange(n):
+    for i in range(n):
         fs = (i / float(n)) % 1.0
         ns, ne = int(N*fs), int(N*(fs+opt['frac']))
         if ne <= N:

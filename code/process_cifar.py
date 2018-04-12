@@ -116,6 +116,8 @@ def proc():
     pca = PCA(D=txf, n_components=txf.shape[1])
     tx = pca.transform(D=txf, whiten=True, ZCA=True).T.reshape(tx.shape)
     vx = pca.transform(D=vxf, whiten=True, ZCA=True).T.reshape(vx.shape)
+    print np.linalg.norm(tx)
+    print tx[0]
 
     print '[Saving processed]'
     np.savez(os.path.join(opt.output, opt.name+'-train-proc.npz'), data=tx.astype('float32'), labels=ty)
