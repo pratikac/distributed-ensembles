@@ -164,23 +164,30 @@ def dry_feed(m, loader, mid=0, opt=None):
     set_dropout(cache)
     m.eval()
 
-def lrschedule(opt, e, logger=None):
-    if opt['lrs'] == '':
-        opt['lrs'] = json.dumps([[opt['B'], opt['lr']]])
+def schedule(opt, e, logger=None, k='lr'):
+    ks = k + 's'
+    if opt[ks] == '':
+        opt[ks] = json.dumps([[opt['B'], opt[k]]])
 
-    lrs = json.loads(opt['lrs'])
+    rs = json.loads(opt[ks])
 
-    idx = len(lrs)-1
-    for i in xrange(len(lrs)):
-        if e < lrs[i][0]:
+    idx = len(rs)-1
+    for i in range(len(rs)):
+        if e < rs[i][0]:
             idx = i
             break
-    lr = lrs[idx][1]
+    r = rs[idx][1]
 
-    print('[LR]: ', lr)
+    print('[%s]: '%k, r)
     if opt['l'] and logger:
-        logger.info('[LR] ' + json.dumps({'lr': lr}))
-    return lr
+        logger.info('[%s] '%k + json.dumps({'%s'%k: r}))
+    return r
+
+def lrschedule(opt, e, logger=None):
+    return schedule(opt, e, logger, 'lr')
+
+def Lschedule(opt, e, logger=None):
+    return schedule(opt, e, logger, 'L')
 
 class AverageMeters(object):
     def __init__(self, ks):

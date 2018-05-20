@@ -13,7 +13,8 @@ L = 1
 n = 3
 maxb = 500
 
-opt = dict(b=bsz, frac=1.0, n=3, m='mnist', augment=True, nw=1)
+opt = dict(b=bsz, frac=1.0, n=3, m='mnist', augment=True, nw=1, dataset='cifar10')
+d, augment = getattr(loader, opt['m'])(opt)
 
 # d, augment = getattr(loader, opt['m'])(opt)
 

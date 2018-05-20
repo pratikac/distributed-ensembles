@@ -9,6 +9,17 @@ import exptutils
 import numpy as np
 from torch.nn.parallel import scatter, parallel_apply, gather
 
+def get_num_classes(opt):
+    num_classes = 0
+    if opt['dataset'] == 'cifar10' or opt['dataset'] == 'svhn':
+        num_classes = 10
+    elif opt['dataset'] == 'cifar100':
+        num_classes = 100
+    elif opt['dataset'] == 'imagenet':
+        num_classes = 1000
+    else:
+        assert False, 'Unknown dataset: %s'%opt['dataset']
+    return num_classes
 
 class View(nn.Module):
     def __init__(self,o):
@@ -113,10 +124,7 @@ class allcnn(nn.Module):
         if opt['l2'] < 0:
             opt['l2'] = 1e-3
 
-        if opt['dataset'] == 'cifar10' or opt['dataset'] == 'svhn':
-            num_classes = 10
-        elif opt['dataset'] == 'cifar100':
-            num_classes = 100
+        num_classes = get_num_classes(opt)
 
         def convbn(ci,co,ksz,s=1,pz=0):
             return nn.Sequential(
@@ -185,7 +193,7 @@ class wideresnet(nn.Module):
 
     @staticmethod
     def netblock(nl, ci, co, blk, s, p=0.):
-        ls = [blk(i==0 and ci or co, co, i==0 and s or 1, p) for i in xrange(nl)]
+        ls = [blk(i==0 and ci or co, co, i==0 and s or 1, p) for i in range(nl)]
         return nn.Sequential(*ls)
 
     def __init__(self, opt):
@@ -198,14 +206,7 @@ class wideresnet(nn.Module):
 
         d, depth, widen = opt['d'], opt['depth'], opt['widen']
 
-        if opt['dataset'] == 'cifar10' or opt['dataset'] == 'svhn':
-            num_classes = 10
-        elif opt['dataset'] == 'cifar100':
-            num_classes = 100
-        elif opt['dataset'] == 'imagenet':
-            num_classes = 1000
-        else:
-            assert False, 'Unknown dataset '+ opt['dataset']
+        num_classes = get_num_classes(opt)
 
         nc = [16, 16*widen, 32*widen, 64*widen]
         assert (depth-4)%6 == 0, 'Incorrect depth'
@@ -334,6 +335,168 @@ class alexnet(nn.Module):
     def forward(self, x):
         return self.m(x)
 
+class densenet121(nn.Module):
+    name = 'densenet121'
+    def __init__(self, opt):
+        super(densenet121, self).__init__()
+        opt['l2'] = 1e-4
+
+        self.m = thv.models.densenet121(num_classes=get_num_classes(opt))
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+class densenet169(nn.Module):
+    name = 'densenet169'
+    def __init__(self, opt):
+        super(densenet169, self).__init__()
+        opt['l2'] = 1e-4
+
+        self.m = thv.models.densenet169(num_classes=get_num_classes(opt))
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+class densenet201(nn.Module):
+    name = 'densenet201'
+    def __init__(self, opt):
+        super(densenet201, self).__init__()
+        opt['l2'] = 1e-4
+
+        self.m = thv.models.densenet201(num_classes=get_num_classes(opt))
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+class squeezenet(nn.Module):
+    name = 'squeezenet'
+    def __init__(self, opt):
+        super(squeezenet, self).__init__()
+
+        self.m = getattr(thv.models, 'squeezenet1_1')(num_classes=get_num_classes(opt))
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+class cattable_t(nn.Module):
+    def __init__(self, m1, m2):
+        super(cattable_t, self).__init__()
+        self.m1, self.m2 = m1, m2
+
+    def forward(self, x):
+        return th.cat((self.m1(x), self.m2(x)), 1)
+
+class densenet(nn.Module):
+    name = 'densenet'
+
+    @staticmethod
+    def bottleneck(nc, gr, p):
+        ic = 4*gr
+        h = nn.Sequential(
+            nn.BatchNorm2d(nc),
+            nn.ReLU(True),
+            nn.Conv2d(nc, ic, kernel_size=1, bias=False),
+            nn.BatchNorm2d(ic),
+            nn.ReLU(True),
+            nn.Conv2d(ic, gr, kernel_size=3, padding=1, bias=False),
+            nn.Dropout(p),
+            )
+        return cattable_t(h, nn.Sequential())
+
+    @staticmethod
+    def basic(nc, gr, p):
+        h = nn.Sequential(
+            nn.BatchNorm2d(nc),
+            nn.ReLU(True),
+            nn.Conv2d(nc, gr, kernel_size=3, padding=1, bias=False),
+            nn.Dropout(p)
+            )
+        return cattable_t(h, nn.Sequential())
+
+    @staticmethod
+    def transition(nci, nco, p):
+        return nn.Sequential(
+            nn.BatchNorm2d(nci),
+            nn.ReLU(True),
+            nn.Conv2d(nci, nco, kernel_size=1, bias=False),
+            nn.Dropout(p),
+            nn.AvgPool2d(2))
+
+    def __init__(self, opt):
+        super(densenet, self).__init__()
+
+        gr = opt.get('gr', 12)
+        depth = opt.get('depth', 100)
+        reduction = opt.get('reduction', 0.5)
+        is_bottleneck = True
+
+        assert not opt['dataset'] == 'imagenet', 'Use specific densenet from torchvision, \
+                this is only meant for cifar'
+        num_classes = get_num_classes(opt)
+
+        if opt['d'] < 0:
+            opt['d'] = 0.0
+        if opt['l2'] < 0:
+            opt['l2'] = 1e-4
+
+        nblk = (depth-4) // 3
+        if is_bottleneck:
+            nblk //= 2
+
+        ncis, ncos = [2*gr], [2*gr]
+        for i in range(1,4):
+            nc = ncos[-1] + nblk*gr
+            ncis.append(nc)
+            ncos.append(int(math.floor(nc*reduction)))
+
+        def denseblock(nc, gr, nblk, blk, p):
+            wl = self.bottleneck if is_bottleneck else self.basic
+            ls = [wl(nc + i*gr, gr, p) for i in range(nblk)]
+            return nn.Sequential(*ls)
+
+        self.m = nn.Sequential(
+                nn.Conv2d(3, ncis[0], kernel_size=3, padding=1, bias=False),
+                denseblock(ncis[0], gr, nblk, is_bottleneck, opt['d']),
+                self.transition(ncis[1], ncos[1], opt['d']),
+                denseblock(ncos[1], gr, nblk, is_bottleneck, opt['d']),
+                self.transition(ncis[2], ncos[2], opt['d']),
+                denseblock(ncos[2], gr, nblk, is_bottleneck, opt['d']),
+                nn.BatchNorm2d(ncis[3]),
+                nn.ReLU(True),
+                nn.AvgPool2d(8),
+                View(ncis[3]),
+                nn.Linear(ncis[3], num_classes)
+            )
+
+        for m in self.m.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0]*m.kernel_size[1]*m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2./n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                m.bias.data.zero_()
+
+        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
 class LSTM(nn.Module):
     def __init__(self, opt):
         super(LSTM, self).__init__()
@@ -395,13 +558,13 @@ class ReplicateModel(nn.Module):
         self.n = opt['n']
         n = self.n
 
-        self.ids = [gpus[i%len(gpus)] for i in xrange(n)]
-        self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in xrange(n)]
+        self.ids = [gpus[i%len(gpus)] for i in range(n)]
+        self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in range(n)]
         self.refid = self.ids[0]
         self.ref = globals()[opt['m']](opt).cuda(self.refid)
 
         if n == 1 and opt['g'] >= len(gpus):
-            print 'Using DataParallel...'
+            print('Using DataParallel...')
             self.w[0] = nn.DataParallel(self.w[0], device_ids=gpus)
             self.ref = nn.DataParallel(self.ref, device_ids=gpus)
 
@@ -411,7 +574,7 @@ class ReplicateModel(nn.Module):
             return parallel_apply(self.w, xs)
 
         yhs = [None]*self.n
-        for i in xrange(self.n):
+        for i in range(self.n):
             yhs[i] = self.w[i](xs[i])
         return yhs
 
@@ -420,23 +583,23 @@ class ReplicateModel(nn.Module):
             f = sum(gather(fs, self.refid))
             f.backward()
         else:
-            for i in xrange(self.n):
+            for i in range(self.n):
                 fs[i].backward()
 
     def train(self):
         super(ReplicateModel, self).train()
         self.ref.train()
-        for i in xrange(self.n):
+        for i in range(self.n):
             self.w[i].train()
 
     def eval(self):
         super(ReplicateModel, self).eval()
         self.ref.eval()
-        for i in xrange(self.n):
+        for i in range(self.n):
             self.w[i].eval()
 
     def zero_grad(self):
-        for i in xrange(self.n):
+        for i in range(self.n):
             self.w[i].zero_grad()
 
 class FederatedModel(nn.Module):
@@ -451,14 +614,14 @@ class FederatedModel(nn.Module):
         self.n = opt['n']
         n = self.n
 
-        self.ids = [gpus[i%len(gpus)] for i in xrange(n)]
+        self.ids = [gpus[i%len(gpus)] for i in range(n)]
         self.refid = self.ids[0]
 
         if self.all_cuda:
-            self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in xrange(n)]
+            self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in range(n)]
             self.ref = globals()[opt['m']](opt).cuda(self.refid)
         else:
-            self.w = [globals()[opt['m']](opt) for i in xrange(n)]
+            self.w = [globals()[opt['m']](opt) for i in range(n)]
             self.ref = globals()[opt['m']](opt)
 
     def forward(self, ids, xs, ys):
@@ -481,7 +644,7 @@ class FederatedModel(nn.Module):
     def train(self):
         super(FederatedModel, self).train()
         self.ref.train()
-        for i in xrange(self.n):
+        for i in range(self.n):
             self.w[i].train()
 
     def eval(self):

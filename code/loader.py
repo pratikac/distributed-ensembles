@@ -11,6 +11,8 @@ import os, sys, pdb, math, random
 import cv2
 import scipy.io as sio
 
+home = '/home/'+os.environ['USER']
+
 class InfDS(object):
     def __init__(self, d):
         self.d = d
@@ -52,13 +54,13 @@ def get_loaders(d, transforms, opt):
 
     if opt['frac'] > 1-1e-12:
         return [dict(train=trinff,val=tv,test=tv,train_full=trf,
-                idx=th.arange(0,d['train']['x'].size(0))) for i in xrange(opt['n'])]
+                idx=th.arange(0,d['train']['x'].size(0))) for i in range(opt['n'])]
     else:
         n = opt['n']
         N = d['train']['x'].size(0)
         tr = []
         idxs = []
-        for i in xrange(n):
+        for i in range(n):
             fs = (i / float(n)) % 1.0
             ns, ne = int(N*fs), int(N*(fs+opt['frac']))
             x, y = d['train']['x'], d['train']['y']
@@ -72,10 +74,10 @@ def get_loaders(d, transforms, opt):
                 xy = {  'x': th.cat((x[ns:], x[:ne])),
                         'y': th.cat((y[ns:], y[:ne]))}
             tr.append(get_inf_iterator(xy, transforms, opt['b'], nw=0, shuffle=True))
-        return [dict(train=tr[i],val=tv,test=tv,train_full=trf,idx=idxs[i]) for i in xrange(opt['n'])]
+        return [dict(train=tr[i],val=tv,test=tv,train_full=trf,idx=idxs[i]) for i in range(opt['n'])]
 
 def mnist(opt):
-    loc = '/local2/pratikac/mnist'
+    loc = home + '/local2/pratikac/mnist'
     d1, d2 = datasets.MNIST(loc, train=True), datasets.MNIST(loc, train=False)
 
     d = {'train': {'x': d1.train_data.view(-1,1,28,28).float(), 'y': d1.train_labels},
@@ -85,8 +87,8 @@ def mnist(opt):
     return d, lambda x: x
 
 def cifar_helper(opt, s):
-    loc = '/local2/pratikac/cifar/'
-    if 'resnet' in opt['m']:
+    loc = home + '/local2/pratikac/cifar/'
+    if 'resnet' in opt['m'] or 'densenet' in opt['m']:
         d1 = np.load(loc+s+'-train.npz')
         d2 = np.load(loc+s+'-test.npz')
     else:
@@ -102,7 +104,7 @@ def cifar_helper(opt, s):
         lambda x: x.numpy().astype(np.float32),
         lambda x: x.transpose(1,2,0),
         T.RandomHorizontalFlip(),
-        T.Pad(4, cv2.BORDER_REFLECT),
+        T.Pad(4, 2),
         T.RandomCrop(sz),
         lambda x: x.transpose(2,0,1),
         th.from_numpy])
@@ -116,7 +118,7 @@ def cifar100(opt):
     return cifar_helper(opt, 'cifar100')
 
 def svhn(opt):
-    loc = '/local2/pratikac/svhn/'
+    loc = home + '/local2/pratikac/svhn/'
 
     d1 = sio.loadmat(loc + 'train_32x32.mat')
     d2 = sio.loadmat(loc + 'extra_32x32.mat')
@@ -144,7 +146,7 @@ def svhn(opt):
         lambda x: x.numpy().astype(np.float32),
         lambda x: x.transpose(1,2,0),
         T.RandomHorizontalFlip(),
-        T.Pad(4, cv2.BORDER_REFLECT),
+        T.Pad(4, 2),
         T.RandomCrop(sz),
         lambda x: x.transpose(2,0,1),
         th.from_numpy])
@@ -152,7 +154,7 @@ def svhn(opt):
     return d, lambda x: x
 
 def imagenet(opt, only_train=False):
-    loc = '/local2/pratikac/imagenet'
+    loc = home + '/local2/pratikac/imagenet'
     bsz, nw = opt['b'], 4
 
     traindir = os.path.join(loc, 'train')
@@ -180,37 +182,13 @@ def imagenet(opt, only_train=False):
         batch_size=bsz, shuffle=False,
         num_workers=nw, pin_memory=True)
 
-    return train_loader, val_loader, val_loader, train_loader
+    ids = th.arange(0, len(train_loader)).long()
 
-def tiny_imagenet(opt, only_train=False):
-    loc = '/local2/pratikac/tiny_imagenet'
-    bsz, nw = opt['b'], 4
-
-    traindir = os.path.join(loc, 'train')
-    valdir = os.path.join(loc, 'val')
-
-    input_transform = []
-
-    normalize = [transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])]
-
-
-    train_folder = datasets.ImageFolder(traindir, transforms.Compose([
-            transforms.RandomHorizontalFlip()] + normalize))
-    train_loader = th.utils.data.DataLoader(
-        train_folder,
-        batch_size=bsz, shuffle=True,
-        num_workers=nw, pin_memory=True)
-
-    val_folder = datasets.ImageFolder(valdir, transforms.Compose(
-            input_transform + normalize))
-    val_loader = th.utils.data.DataLoader(
-        val_folder,
-        batch_size=bsz, shuffle=False,
-        num_workers=nw, pin_memory=True)
-
-    return train_loader, val_loader, val_loader, train_loader
+    return [dict(train=train_loader,
+                val=val_loader,
+                test=val_loader,
+                train_full=train_loader,
+                idx=ids) for i in range(opt['n'])]
 
 # PTB
 class Dictionary(object):
@@ -229,7 +207,7 @@ class Dictionary(object):
 
 class Corpus(object):
     def __init__(self):
-        path = '/local2/pratikac/ptb'
+        path = home + '/local2/pratikac/ptb'
         self.dictionary = Dictionary()
         self.train = self.tokenize(os.path.join(path, 'ptb.train.txt'))
         self.valid = self.tokenize(os.path.join(path, 'ptb.valid.txt'))
@@ -295,7 +273,7 @@ class FederatedSampler(object):
         self.sidx.copy_(th.multinomial(self.idxs[i], self.b, True))
         x = th.index_select(self.d['train']['x'], 0, self.sidx)
         y = th.index_select(self.d['train']['y'], 0, self.sidx).squeeze()
-        for i in xrange(self.b):
+        for i in range(self.b):
             x[i] = self.transforms(x[i])
         return x,y
 
@@ -309,7 +287,7 @@ def get_federated_loaders(d, transforms, opt):
     n = opt['n']
     N = d['train']['x'].size(0)
     idxs = []
-    for i in xrange(n):
+    for i in range(n):
         fs = (i / float(n)) % 1.0
         ns, ne = int(N*fs), int(N*(fs+opt['frac']))
         if ne <= N:
