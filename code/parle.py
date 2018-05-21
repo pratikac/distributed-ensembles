@@ -13,32 +13,53 @@ cudnn.benchmark = True
 import sys, argparse, random, pdb, os
 from copy import deepcopy
 
-p = argparse.ArgumentParser('Parle',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-p.add_argument('--data', type=str, default='/local2/pratikac/mnist', help='dataset')
-p.add_argument('--lr', type=float, default=0.1, help='learning rate')
-p.add_argument('-b', type=int, default=128, help='batch size')
-p.add_argument('-L', type=int, default=25, help='prox. eval steps')
-p.add_argument('--gamma', type=float, default=0.01, help='gamma')
-p.add_argument('--rho', type=float, default=0.01, help='rho')
-p.add_argument('-n', type=int, default=1, help='replicas')
-p.add_argument('-r', type=int, default=0, help='rank')
-opt = vars(p.parse_args())
+from exptutils import *
+import models, loader
+from timeit import default_timer as timer
+import logging
+
+opt = add_args([
+['-o', '/home/%s/local2/pratikac/results'%os.environ['USER'], 'output'],
+['-m', 'lenet', 'lenet | mnistfc | allcnn | wrn* | resnet*'],
+['--dataset', 'mnist', 'mnist | cifar10 | cifar100 | svhn | imagenet'],
+['-g', 3, 'gpu idx'],
+['-n', 1, 'replicas'],
+['-r', 0, 'rank'],
+['--gpus', '', 'groups of gpus'],
+['--frac', 1.0, 'fraction of dataset'],
+['-b', 128, 'batch_size'],
+['--augment', False, 'data augmentation'],
+['-e', 0, 'start epoch'],
+['-d', -1., 'dropout'],
+['--l2', -1., 'ell-2'],
+['-B', 100, 'max epochs'],
+['--lr', 0.1, 'learning rate'],
+['--lrs', '', 'learning rate schedule'],
+['--Ls', '', 'schedule for Langevin steps'],
+['-L', 25, 'sgld iterations'],
+['--gamma', 0.01, 'gamma'],
+['--rho', 0.01, 'rho'],
+['-s', 42, 'seed'],
+['--nw', 0, 'workers'],
+['-l', False, 'log'],
+['-f', 10, 'print freq'],
+['-v', False, 'verbose'],
+['--resume', '', 'resume ckpt'],
+['--save', False, 'save best ckpt'],
+['--save_all', False, 'save all ckpt'],
+])
+
+ngpus = th.cuda.device_count()
+gpus = [i if opt['g'] >= ngpus else opt['g'] for i in range(ngpus)]
+if not opt['gpus'] == '':
+    gpus = json.loads(opt['gpus'])
+setup(t=4, s=opt['s'], gpus=gpus)
+opt['g'] = gpus[int(opt['r'] % len(gpus))]
+th.cuda.set_device(opt['g'])
 
 opt['B'], opt['l2'] = 5, -1.0
 opt['rho'] = opt['rho']*opt['L']*opt['n']
 
-opt['s'] = 42 + opt['r']
-random.seed(opt['s'])
-np.random.seed(opt['s'])
-th.manual_seed(opt['s'])
-
-opt['cuda'] = th.cuda.is_available()
-if opt['cuda']:
-    ngpus = th.cuda.device_count()
-    opt['g'] = int(opt['r'] % ngpus)
-    th.cuda.set_device(opt['g'])
-    th.cuda.manual_seed(opt['s'])
 print(opt)
 
 # initialize distributed comm
@@ -46,44 +67,16 @@ os.environ['MASTER_ADDR'] = 'localhost'
 os.environ['MASTER_PORT'] = '29500'
 dist.init_process_group('gloo', rank=opt['r'], world_size=opt['n'])
 
-def get_iterator(mode):
-    ds = MNIST(root=opt['data'], download=True, train=mode)
-    data = getattr(ds, 'train_data' if mode else 'test_data')
-    labels = getattr(ds, 'train_labels' if mode else 'test_labels')
-    tds = tnt.dataset.TensorDataset([data, labels])
-    return tds.parallel(batch_size=opt['b'],
-            num_workers=0, shuffle=mode, pin_memory=True)
+dataset, augment = getattr(loader, opt['dataset'])(opt)
+train_ds = loader.get_inf_iterator(dataset['train'], augment, bsz=opt['b'])
+train_noinf_ds = loader.get_iterator(dataset['train'], augment, bsz=opt['b'])
+val_ds = loader.get_iterator(dataset['val'], lambda x: x, bsz=opt['b'], shuffle=False)
 
-class View(nn.Module):
-    def __init__(self,o):
-        super(View, self).__init__()
-        self.o = o
-    def forward(self,x):
-        return x.view(-1, self.o)
-
-def convbn(ci,co,ksz,psz,p):
-    return nn.Sequential(
-        nn.Conv2d(ci,co,ksz),
-        nn.BatchNorm2d(co),
-        nn.ReLU(True),
-        nn.MaxPool2d(psz,stride=psz),
-        nn.Dropout(p))
-
-model = nn.Sequential(
-    convbn(1,20,5,3,0.25),
-    convbn(20,50,5,2,0.25),
-    View(50*2*2),
-    nn.Linear(50*2*2, 500),
-    nn.BatchNorm1d(500),
-    nn.ReLU(True),
-    nn.Dropout(0.25),
-    nn.Linear(500,10),
-    )
+model = getattr(models, opt['m'])(opt)
 criterion = nn.CrossEntropyLoss()
 
-if opt['cuda']:
-    model = model.cuda()
-    criterion = criterion.cuda()
+model = model.cuda()
+criterion = criterion.cuda()
 
 def parle_step(sync=False):
     eps = 1e-3
@@ -165,25 +158,22 @@ def parle_step(sync=False):
 def train(e):
     model.train()
 
-    train_ds = get_iterator(True)
+    opt['nb'] = len(train_noinf_ds)
     train_iter = train_ds.__iter__()
-    opt['nb'] = len(train_iter)
 
     loss = tnt.meter.AverageValueMeter()
     top1 = tnt.meter.ClassErrorMeter()
 
     for b in range(opt['nb']):
         for l in range(opt['L']):
-            try:
-                x,y = next(train_iter)
-            except StopIteration:
-                train_iter = train_ds.__iter__()
-                x,y = next(train_iter)
+            x,y = next(train_iter)
+            # try:
+            #     x,y = next(train_iter)
+            # except StopIteration:
+            #     train_iter = train_ds.__iter__()
+            #     x,y = next(train_iter)
 
-            x = Variable(x.view(-1,1,28,28).float() / 255.0)
-            y = Variable(th.LongTensor(y))
-            if opt['cuda']:
-                x, y = x.cuda(async=True), y.cuda(async=True)
+            x, y = Variable(x), Variable(y)
 
             model.zero_grad()
             yh = model(x)
@@ -229,10 +219,8 @@ def dry_feed(m):
     cache = set_dropout()
     train_iter = get_iterator(True)
     with th.no_grad():
-        for _, (x,y) in enumerate(train_iter):
-            x = Variable(x.view(-1,1,28,28).float() / 255.0)
-            if opt['cuda']:
-                x = x.cuda(async=True)
+        for _, (x,y) in enumerate(train_noinf_ds):
+            x = Variable(x).cuda()
             m(x)
     set_dropout(cache)
 
@@ -244,16 +232,11 @@ def validate(e):
     dry_feed(m)
     m.eval()
 
-    val_iter = get_iterator(False)
-
     loss = tnt.meter.AverageValueMeter()
     top1 = tnt.meter.ClassErrorMeter()
 
-    for b, (x,y) in enumerate(val_iter):
-        x = Variable(x.view(-1,1,28,28).float() / 255.0)
-        y = Variable(th.LongTensor(y))
-        if opt['cuda']:
-            x, y = x.cuda(async=True), y.cuda(async=True)
+    for b, (x,y) in enumerate(val_ds):
+        x, y = Variable(x).cuda(), Variable(y).cuda()
 
         yh = m(x)
         f = criterion(yh, y)
