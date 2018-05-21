@@ -69,10 +69,11 @@ if opt['r'] == 0:
 # normalize rho
 opt['rho'] = opt['rho']*opt['L']*opt['n']
 
-# initialize distributed comm
-os.environ['MASTER_ADDR'] = 'localhost'
-os.environ['MASTER_PORT'] = '29500'
-dist.init_process_group('gloo', rank=opt['r'], world_size=opt['n'])
+if opt['n'] > 1:
+    # initialize distributed comm
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '29500'
+    dist.init_process_group('gloo', rank=opt['r'], world_size=opt['n'])
 
 if not opt['dataset'] == 'imagenet':
     dataset, augment = getattr(loader, opt['dataset'])(opt)
@@ -122,16 +123,21 @@ def parle_step(sync=False):
     gamma, rho = min(gamma, 1), min(rho, 10)
 
     def sync_with_master(xa, x):
-        for p in model.parameters():
-            s['cache'][p].copy_(xa[p])
-            dist.all_reduce(s['cache'][p], op=dist.reduce_op.SUM)
-
-        if r == 0:
+        if opt['n'] > 1:
             for p in model.parameters():
-                x[p] = s['cache'][p]/float(opt['n'])
+                s['cache'][p].copy_(xa[p])
+                dist.all_reduce(s['cache'][p], op=dist.reduce_op.SUM)
 
-        for p in model.parameters():
-            dist.broadcast(x[p], src=0)
+            if r == 0:
+                for p in model.parameters():
+                    x[p] = s['cache'][p]/float(opt['n'])
+
+            for p in model.parameters():
+                dist.broadcast(x[p], src=0)
+        else:
+            for p in model.parameters():
+                s['cache'][p].copy_(xa[p])
+                x[p].copy_(xa[p])
 
     if sync:
         # add another sync, helps with large L
@@ -162,6 +168,25 @@ def parle_step(sync=False):
 
     s['t'] += 1
 
+
+from line_profiler import LineProfiler
+def do_profile(follow=[]):
+    def inner(func):
+        def profiled_func(*args, **kwargs):
+            try:
+                profiler = LineProfiler()
+                profiler.add_function(func)
+                for f in follow:
+                    profiler.add_function(f)
+                profiler.enable_by_count()
+                return func(*args, **kwargs)
+            finally:
+                profiler.print_stats()
+        return profiled_func
+    return inner
+
+
+# @do_profile(follow=[parle_step])
 def train(e):
     opt['lr'] = lrschedule(opt, e, logger)
     opt['L'] = Lschedule(opt, e, logger)
@@ -182,7 +207,7 @@ def train(e):
                 train_iter = loader['train'].__iter__()
                 x,y = next(train_iter)
 
-            x, y = Variable(x).cuda(), Variable(y).cuda()
+            x, y = Variable(x).cuda(async=True), Variable(y).cuda(async=True)
 
             model.zero_grad()
             yh = model(x)
@@ -228,7 +253,7 @@ def dry_feed(m):
     cache = set_dropout()
     with th.no_grad():
         for _, (x,y) in enumerate(loader['train_full']):
-            x = Variable(x).cuda()
+            x = Variable(x).cuda(async=True)
             m(x)
     set_dropout(cache)
 
@@ -244,7 +269,7 @@ def validate(e):
     top1 = tnt.meter.ClassErrorMeter()
 
     for b, (x,y) in enumerate(loader['val']):
-        x, y = Variable(x).cuda(), Variable(y).cuda()
+        x, y = Variable(x).cuda(async=True), Variable(y).cuda(async=True)
 
         yh = m(x)
         f = criterion(yh, y)
