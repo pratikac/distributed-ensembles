@@ -259,11 +259,10 @@ def dry_feed(m):
     set_dropout(cache)
 
 def validate(e):
-    # m = deepcopy(model)
-    # for p,q in zip(m.parameters(), model.parameters()):
-    #     p.data.copy_(opt['state']['x'][q])
+    m = deepcopy(model)
+    for p,q in zip(m.parameters(), model.parameters()):
+        p.data.copy_(opt['state']['x'][q])
 
-    m = model
     dry_feed(m)
     m.eval()
 
@@ -278,7 +277,6 @@ def validate(e):
         top1, top5 = clerr(yh.data, y.data, (1,5))
         meters.add(dict(f=f, top1=top1, top5=top5))
 
-
         mm = meters.value()
         if b % 100 == 0 and b > 0:
             print((color('red', '*[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, b, \
@@ -290,6 +288,11 @@ def validate(e):
         s.update(**mm)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
+
+    # update master with these weights
+    for p in m.parameters():
+        opt['state']['x'][p].copy_(p.data)
+        dist.broadcast(opt['state']['x'][p], src=0)
 
     print((color('red', '**[%2d] %2.4f %2.4f%% %2.4f%%\n'))%(e, mm['f'], mm['top1'], mm['top5']))
     print('')
