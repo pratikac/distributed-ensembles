@@ -1,6 +1,6 @@
 import torch as th
-import torchvision.cvtransforms as T
-import torchvision.transforms as transforms
+import torchvision.transforms as T
+import cvtransforms as cv
 from torchvision import datasets
 import torchnet as tnt
 import torch.utils.data
@@ -48,6 +48,10 @@ def get_loaders(d, transforms, opt):
     if not opt['augment']:
         transforms = lambda x: x
 
+    opt['frac'] = opt.get('frac', 1.0)
+    opt['nw'] = opt.get('nw', 0)
+    opt['n'] = opt.get('n', 1)
+
     trf = get_iterator(d['train'], transforms, opt['b'], nw=opt['nw'], shuffle=True)
     trinff = get_inf_iterator(d['train'], transforms, opt['b'], nw=opt['nw'], shuffle=True)
     tv = get_iterator(d['val'], lambda x:x, opt['b'], nw=opt['nw'], shuffle=False)
@@ -76,6 +80,40 @@ def get_loaders(d, transforms, opt):
             tr.append(get_inf_iterator(xy, transforms, opt['b'], nw=0, shuffle=True))
         return [dict(train=tr[i],val=tv,test=tv,train_full=trf,idx=idxs[i]) for i in range(opt['n'])]
 
+def halfmnist(opt, sz=7, nc=2):
+    loc = home + '/local2/pratikac/mnist'
+    d1, d2 = datasets.MNIST(loc, train=True), datasets.MNIST(loc, train=False)
+
+    d = {'train': {'x': d1.train_data.view(-1,1,28,28).float(), 'y': d1.train_labels},
+        'val': {'x': d2.test_data.view(-1,1,28,28).float(), 'y': d2.test_labels}}
+    shuffle_data(d['train'])
+
+    idx = d['train']['y'].numpy() < nc
+    d['train']['x'] = th.from_numpy(d['train']['x'].numpy()[idx])
+    d['train']['y'] = d['train']['y'][d['train']['y'] < nc]
+
+    idx = d['val']['y'].numpy() < nc
+    d['val']['x'] = th.from_numpy(d['val']['x'].numpy()[idx])
+    d['val']['y'] = d['val']['y'][d['val']['y'] < nc]
+
+    txs, vxs = [], []
+
+    _txs = d['train']['x']
+    for i in range(len(_txs)):
+        t = T.ToPILImage()(_txs[i])
+        t = T.Scale(sz)(t)
+        txs.append(T.ToTensor()(t).view(-1,1,sz,sz))
+    d['train']['x'] = th.cat(txs)
+
+    _vxs = d['val']['x']
+    for i in range(len(_vxs)):
+        t = T.ToPILImage()(_vxs[i])
+        t = T.Scale(sz)(t)
+        vxs.append(T.ToTensor()(t).view(-1,1,sz,sz))
+    d['val']['x'] = th.cat(vxs)
+
+    return d, lambda x: x
+
 def mnist(opt):
     loc = home + '/local2/pratikac/mnist'
     d1, d2 = datasets.MNIST(loc, train=True), datasets.MNIST(loc, train=False)
@@ -88,6 +126,10 @@ def mnist(opt):
 
 def cifar_helper(opt, s):
     loc = home + '/local2/pratikac/cifar/'
+
+    csz = 16 if opt['dataset'] == 'cifar10' else 8
+    cutout = cv.CutOut(csz, (0,0,0))
+
     if 'resnet' in opt['m'] or 'densenet' in opt['m']:
         d1 = np.load(loc+s+'-train.npz')
         d2 = np.load(loc+s+'-test.npz')
@@ -103,11 +145,13 @@ def cifar_helper(opt, s):
     augment = tnt.transform.compose([
         lambda x: x.numpy().astype(np.float32),
         lambda x: x.transpose(1,2,0),
-        T.RandomHorizontalFlip(),
-        T.Pad(4, 2),
-        T.RandomCrop(sz),
+        cv.RandomHorizontalFlip(),
+        cv.Pad(4, 2),
+        cv.RandomCrop(sz),
+        cutout,
         lambda x: x.transpose(2,0,1),
-        th.from_numpy])
+        th.from_numpy
+        ])
 
     return d, augment
 
@@ -145,11 +189,13 @@ def svhn(opt):
     augment = tnt.transform.compose([
         lambda x: x.numpy().astype(np.float32),
         lambda x: x.transpose(1,2,0),
-        T.RandomHorizontalFlip(),
-        T.Pad(4, 2),
-        T.RandomCrop(sz),
+        cv.RandomHorizontalFlip(),
+        cv.Pad(4, 2),
+        cv.RandomCrop(sz),
+        cv.CutOut(14, (0,0,0)),
         lambda x: x.transpose(2,0,1),
-        th.from_numpy])
+        th.from_numpy
+        ])
 
     return d, lambda x: x
 
@@ -162,14 +208,13 @@ def imagenet(opt, only_train=False):
 
     input_transform = [transforms.Scale(256)]
 
-    normalize = [transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])]
-
+    normalize = [T.ToTensor(),
+                T.Normalize(mean=[0.485, 0.456, 0.406],
+                            std=[0.229, 0.224, 0.225])]
 
     train_folder = datasets.ImageFolder(traindir, transforms.Compose([
-            transforms.RandomSizedCrop(224),
-            transforms.RandomHorizontalFlip()] + normalize))
+            T.RandomSizedCrop(224),
+            T.RandomHorizontalFlip()] + normalize))
     train_loader = th.utils.data.DataLoader(
         train_folder,
         batch_size=bsz, shuffle=True,

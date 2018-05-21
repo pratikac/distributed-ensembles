@@ -9,22 +9,20 @@ import exptutils
 import numpy as np
 from torch.nn.parallel import scatter, parallel_apply, gather
 
+from microbn import MicroBatchNorm2d, MicroBatchNorm1d
+
 def get_num_classes(opt):
-    num_classes = 0
-    if opt['dataset'] == 'cifar10' or opt['dataset'] == 'svhn':
-        num_classes = 10
-    elif opt['dataset'] == 'cifar100':
-        num_classes = 100
-    elif opt['dataset'] == 'imagenet':
-        num_classes = 1000
-    else:
+    d = dict(mnist=10, svhn=10, cifar10=10,
+            cifar100=100, imagenet=1000, halfmnist=10)
+    if not opt['dataset'] in d:
         assert False, 'Unknown dataset: %s'%opt['dataset']
-    return num_classes
+    return d[opt['dataset']]
 
 class View(nn.Module):
     def __init__(self,o):
         super(View, self).__init__()
         self.o = o
+
     def forward(self,x):
         return x.view(-1, self.o)
 
@@ -60,7 +58,8 @@ class mnistfc(nn.Module):
             nn.Dropout(opt['d']),
             nn.Linear(c,10))
 
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         if opt['v']:
             print(s)
         logging.info(s)
@@ -70,12 +69,93 @@ class mnistfc(nn.Module):
 
 class lenet(nn.Module):
     name = 'lenet'
-    def __init__(self, opt, c1=20, c2=50, c3=500):
+    def __init__(self, opt, c1=20, c2=50, c3=500, microbn=False):
         super(lenet, self).__init__()
 
+        opt['d'] = opt.get('d', -1.0)
         if opt['d'] < 0:
             opt['d'] = 0.25
         opt['l2'] = 0.
+
+        if microbn:
+            bn1, bn2 = MicroBatchNorm1d, MicroBatchNorm2d
+        else:
+            bn1, bn2 = nn.BatchNorm1d, nn.BatchNorm2d
+
+        def convbn(ci,co,ksz,psz,p):
+            return nn.Sequential(
+                nn.Conv2d(ci,co,ksz),
+                bn2(co),
+                nn.ReLU(True),
+                nn.MaxPool2d(psz,stride=psz),
+                nn.Dropout(p))
+
+        self.m = nn.Sequential(
+            convbn(1,c1,5,3,opt['d']),
+            convbn(c1,c2,5,2,opt['d']),
+            View(c2*2*2),
+            nn.Linear(c2*2*2, c3),
+            bn1(c3),
+            nn.ReLU(True),
+            nn.Dropout(opt['d']),
+            nn.Linear(c3,10))
+
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+class fclenet(nn.Module):
+    name = 'fclenet'
+    def __init__(self, opt, c=64):
+        super(fclenet, self).__init__()
+
+        opt['l2'] = 0.
+        nc = opt.get('nc', get_num_classes(opt))
+
+        self.m = nn.Sequential(
+            View(49),
+            nn.Linear(49,c),
+            nn.BatchNorm1d(c),
+            nn.ReLU(True),
+            nn.Linear(c, nc)
+        )
+
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+class fclenett(fclenet):
+    name = 'fclenett'
+    def __init__(self, opt, c=16):
+        opt['d'] = 0.0
+        opt['l2'] = 0
+        super(fclenett, self).__init__(opt, c)
+
+class fclenets(fclenet):
+    name = 'fclenets'
+    def __init__(self, opt, c=64):
+        opt['d'] = 0.0
+        opt['l2'] = 0
+        super(fclenets, self).__init__(opt, c)
+
+class lenett(nn.Module):
+    name = 'lenett'
+    def __init__(self, opt, c1=4, c2=8):
+        if (not 'd' in opt) or opt['d'] < 0:
+            opt['d'] = 0.0
+
+        super(lenett, self).__init__()
+
+        opt['l2'] = 0.
+        nc = opt.get('nc', 10)
 
         def convbn(ci,co,ksz,psz,p):
             return nn.Sequential(
@@ -89,13 +169,10 @@ class lenet(nn.Module):
             convbn(1,c1,5,3,opt['d']),
             convbn(c1,c2,5,2,opt['d']),
             View(c2*2*2),
-            nn.Linear(c2*2*2, c3),
-            nn.BatchNorm1d(c3),
-            nn.ReLU(True),
-            nn.Dropout(opt['d']),
-            nn.Linear(c3,10))
+            nn.Linear(c2*2*2, nc))
 
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         print(s)
         logging.info(s)
 
@@ -104,7 +181,10 @@ class lenet(nn.Module):
 
 class lenets(lenet):
     name = 'lenets'
-    def __init__(self, opt, c1=8, c2=16, c3=32):
+    def __init__(self, opt, c1=8, c2=16, c3=128):
+        if (not 'd' in opt) or opt['d'] < 0:
+            opt['d'] = 0.0
+
         super(lenets, self).__init__(opt, c1, c2, c3)
 
 class lenetl(lenet):
@@ -113,26 +193,77 @@ class lenetl(lenet):
         opt['d'] = 0.5
         super(lenetl, self).__init__(opt, c1, c2, c3)
 
-class allcnn(nn.Module):
-    name = 'allcnn'
+class cifarcnns(nn.Module):
+    name = 'cifarcnns'
 
-    def __init__(self, opt, c1=96, c2=192):
-        super(allcnn, self).__init__()
+    def __init__(self, opt):
+        super(cifarcnns, self).__init__()
 
-        if opt['d'] < 0:
-            opt['d'] = 0.5
-        if opt['l2'] < 0:
+        if (not 'l2' in opt) or opt['l2'] < 0:
             opt['l2'] = 1e-3
 
+        if (not 'd' in opt) or opt['d'] < 0:
+            if opt['augment']:
+                opt['d'] = 0.0
+            else:
+                opt['d'] = 0.25
+
         num_classes = get_num_classes(opt)
+        bn1, bn2 = nn.BatchNorm1d, nn.BatchNorm2d
 
         def convbn(ci,co,ksz,s=1,pz=0):
             return nn.Sequential(
                 nn.Conv2d(ci,co,ksz,stride=s,padding=pz),
-                nn.BatchNorm2d(co),
+                bn2(co),
                 nn.ReLU(True))
+
         self.m = nn.Sequential(
-            nn.Dropout(0.2),
+            convbn(3,16,5,1,2),
+            nn.MaxPool2d(2,2),
+            convbn(16,20,5,1,2),
+            nn.MaxPool2d(2,2),
+            convbn(20,20,5,1,2),
+            nn.MaxPool2d(2,2),
+            View(320),
+            nn.Linear(320, num_classes))
+
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
+        print(s)
+        logging.info(s)
+
+    def forward(self, x):
+        return self.m(x)
+
+class allcnn(nn.Module):
+    name = 'allcnn'
+
+    def __init__(self, opt, c1=96, c2=192, microbn=False):
+        super(allcnn, self).__init__()
+
+        if (not 'd' in opt) or opt['d'] < 0:
+            if opt['augment']:
+                opt['d'] = 0.0
+            else:
+                opt['d'] = 0.5
+
+        if (not 'l2' in opt) or opt['l2'] < 0:
+            opt['l2'] = 1e-3
+
+        num_classes = get_num_classes(opt)
+
+        if microbn:
+            bn1, bn2 = MicroBatchNorm1d, MicroBatchNorm2d
+        else:
+            bn1, bn2 = nn.BatchNorm1d, nn.BatchNorm2d
+
+        def convbn(ci,co,ksz,s=1,pz=0):
+            return nn.Sequential(
+                nn.Conv2d(ci,co,ksz,stride=s,padding=pz),
+                bn2(co),
+                nn.ReLU(True)
+                )
+        self.m = nn.Sequential(
             convbn(3,c1,3,1,1),
             convbn(c1,c1,3,1,1),
             convbn(c1,c1,3,2,1),
@@ -147,17 +278,39 @@ class allcnn(nn.Module):
             nn.AvgPool2d(8),
             View(num_classes))
 
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         print(s)
         logging.info(s)
 
     def forward(self, x):
         return self.m(x)
 
+class allcnntt(allcnn):
+    name = 'allcnntt'
+    def __init__(self, opt, c1=4, c2=8):
+        if (not 'd' in opt) or opt['d'] < 0:
+            opt['d'] = 0.0
+
+        opt['l2'] = 1e-4
+        super(allcnntt, self).__init__(opt, c1, c2)
+
+class allcnnt(allcnn):
+    name = 'allcnnt'
+    def __init__(self, opt, c1=8, c2=16):
+        if (not 'd' in opt) or opt['d'] < 0:
+            opt['d'] = 0.0
+
+        opt['l2'] = 1e-4
+        super(allcnnt, self).__init__(opt, c1, c2)
+
 class allcnns(allcnn):
     name = 'allcnns'
-    def __init__(self, opt, c1=16, c2=32):
-        opt['d'] = 0.0
+    def __init__(self, opt, c1=12, c2=24):
+        if (not 'd' in opt) or opt['d'] < 0:
+            opt['d'] = 0.0
+
+        opt['l2'] = 1e-4
         super(allcnns, self).__init__(opt, c1, c2)
 
 class allcnnl(allcnn):
@@ -193,7 +346,7 @@ class wideresnet(nn.Module):
 
     @staticmethod
     def netblock(nl, ci, co, blk, s, p=0.):
-        ls = [blk(i==0 and ci or co, co, i==0 and s or 1, p) for i in range(nl)]
+        ls = [blk((i==0 and ci or co), co, (i==0 and s or 1), p) for i in range(nl)]
         return nn.Sequential(*ls)
 
     def __init__(self, opt):
@@ -210,7 +363,7 @@ class wideresnet(nn.Module):
 
         nc = [16, 16*widen, 32*widen, 64*widen]
         assert (depth-4)%6 == 0, 'Incorrect depth'
-        n = (depth-4)/6
+        n = (depth-4)//6
 
         self.m = nn.Sequential(
                 nn.Conv2d(3, nc[0], kernel_size=3, stride=1, padding=1, bias=False),
@@ -234,8 +387,9 @@ class wideresnet(nn.Module):
                 #m.weight.data.normal_(0, math.sqrt(2./m.in_features))
                 m.bias.data.zero_()
 
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
-        #print(s)
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
+        print(s)
         logging.info(s)
 
     def forward(self, x):
@@ -276,8 +430,10 @@ class resnet18(nn.Module):
     def __init__(self, opt):
         super(resnet18, self).__init__()
         opt['l2'] = 1e-4
-        self.m = thv.models.resnet18()
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        self.m = thv.models.resnet18(num_classes=get_num_classes(opt))
+
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         print(s)
         logging.info(s)
 
@@ -289,8 +445,10 @@ class resnet50(nn.Module):
     def __init__(self, opt):
         super(resnet50, self).__init__()
         opt['l2'] = 1e-4
-        self.m = thv.models.resnet50()
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        self.m = thv.models.resnet50(num_classes=get_num_classes(opt))
+
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         print(s)
         logging.info(s)
 
@@ -302,8 +460,10 @@ class resnet101(nn.Module):
     def __init__(self, opt):
         super(resnet101, self).__init__()
         opt['l2'] = 1e-4
-        self.m = thv.models.resnet101()
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        self.m = thv.models.resnet101(num_classes=get_num_classes(opt))
+
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         print(s)
         logging.info(s)
 
@@ -313,10 +473,12 @@ class resnet101(nn.Module):
 class resnet152(nn.Module):
     name = 'resnet152'
     def __init__(self, opt):
-        super(resnet152, self).__init__()
+        super(resnet152, self).__init__(num_classes=get_num_classes(opt))
         opt['l2'] = 1e-4
         self.m = thv.models.resnet152()
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         print(s)
         logging.info(s)
 
@@ -328,7 +490,9 @@ class alexnet(nn.Module):
     def __init__(self, opt):
         super(alexnet, self).__init__()
         self.m = getattr(thv.models, opt['m'])()
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         print(s)
         logging.info(s)
 
@@ -342,7 +506,9 @@ class densenet121(nn.Module):
         opt['l2'] = 1e-4
 
         self.m = thv.models.densenet121(num_classes=get_num_classes(opt))
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         print(s)
         logging.info(s)
 
@@ -356,7 +522,9 @@ class densenet169(nn.Module):
         opt['l2'] = 1e-4
 
         self.m = thv.models.densenet169(num_classes=get_num_classes(opt))
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         print(s)
         logging.info(s)
 
@@ -370,7 +538,9 @@ class densenet201(nn.Module):
         opt['l2'] = 1e-4
 
         self.m = thv.models.densenet201(num_classes=get_num_classes(opt))
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         print(s)
         logging.info(s)
 
@@ -383,7 +553,9 @@ class squeezenet(nn.Module):
         super(squeezenet, self).__init__()
 
         self.m = getattr(thv.models, 'squeezenet1_1')(num_classes=get_num_classes(opt))
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         print(s)
         logging.info(s)
 
@@ -490,164 +662,10 @@ class densenet(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.bias.data.zero_()
 
-        s = '[%s] Num parameters: %d'%(self.name, num_parameters(self.m))
+        self.N = num_parameters(self.m)
+        s = '[%s] Num parameters: %d'%(self.name, self.N)
         print(s)
         logging.info(s)
 
     def forward(self, x):
         return self.m(x)
-
-class LSTM(nn.Module):
-    def __init__(self, opt):
-        super(LSTM, self).__init__()
-        xdim, hdim, nlayers = opt['vocab'], opt['hdim'], opt['layers']
-        self.drop = nn.Dropout(opt['d'])
-        self.encoder = nn.Embedding(xdim, hdim)
-        self.rnn = nn.LSTM(hdim, hdim, nlayers, dropout=opt['d'])
-        self.decoder = nn.Linear(hdim, xdim)
-
-        # tie weights
-        self.decoder.weight = self.encoder.weight
-        self.init_weights()
-
-        self.hdim = hdim
-        self.nlayers = nlayers
-
-    def init_weights(self):
-        dw = 0.05
-        self.encoder.weight.data.uniform_(-dw, dw)
-        self.decoder.bias.data.fill_(0)
-        self.decoder.weight.data.uniform_(-dw, dw)
-
-    def forward(self, x, h):
-        f = self.drop(self.encoder(x))
-        yh, h = self.rnn(f, h)
-        yh = self.drop(yh)
-        decoded = self.decoder(yh.view(yh.size(0)*yh.size(1), yh.size(2)))
-        return decoded.view(yh.size(0), yh.size(1), decoded.size(1)), h
-
-    def init_hidden(self, bsz):
-        w = next(self.parameters()).data
-        return (Variable(w.new(self.nlayers, bsz, self.hdim).zero_()),
-                Variable(w.new(self.nlayers, bsz, self.hdim).zero_()))
-
-def repackage_hidden(h):
-    if type(h) == Variable:
-        return Variable(h.data)
-    else:
-        return tuple(repackage_hidden(v) for v in h)
-
-class ptbs(LSTM):
-    name = 'ptbs'
-    def __init__(self, opt):
-        super(ptbs, self).__init__(dict(vocab=opt['vocab'], hdim=200, layers=2, d=0.2))
-
-class ptbl(LSTM):
-    name = 'ptbl'
-    def __init__(self, opt):
-        super(ptbl, self).__init__(dict(vocab=opt['vocab'], hdim=1500, layers=2, d=0.65))
-
-class ReplicateModel(nn.Module):
-    def __init__(self, opt, gpus):
-        super(ReplicateModel, self).__init__()
-
-        self.gpus = gpus
-        self.forloop = False
-
-        self.t = 0
-        self.n = opt['n']
-        n = self.n
-
-        self.ids = [gpus[i%len(gpus)] for i in range(n)]
-        self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in range(n)]
-        self.refid = self.ids[0]
-        self.ref = globals()[opt['m']](opt).cuda(self.refid)
-
-        if n == 1 and opt['g'] >= len(gpus):
-            print('Using DataParallel...')
-            self.w[0] = nn.DataParallel(self.w[0], device_ids=gpus)
-            self.ref = nn.DataParallel(self.ref, device_ids=gpus)
-
-    def forward(self, xs, ys):
-        if not self.forloop:
-            xs = [[a] for a in xs]
-            return parallel_apply(self.w, xs)
-
-        yhs = [None]*self.n
-        for i in range(self.n):
-            yhs[i] = self.w[i](xs[i])
-        return yhs
-
-    def backward(self, fs):
-        if not self.forloop:
-            f = sum(gather(fs, self.refid))
-            f.backward()
-        else:
-            for i in range(self.n):
-                fs[i].backward()
-
-    def train(self):
-        super(ReplicateModel, self).train()
-        self.ref.train()
-        for i in range(self.n):
-            self.w[i].train()
-
-    def eval(self):
-        super(ReplicateModel, self).eval()
-        self.ref.eval()
-        for i in range(self.n):
-            self.w[i].eval()
-
-    def zero_grad(self):
-        for i in range(self.n):
-            self.w[i].zero_grad()
-
-class FederatedModel(nn.Module):
-    def __init__(self, opt, gpus):
-        super(FederatedModel, self).__init__()
-
-        self.all_cuda = False
-
-        self.gpus = gpus
-
-        self.t = 0
-        self.n = opt['n']
-        n = self.n
-
-        self.ids = [gpus[i%len(gpus)] for i in range(n)]
-        self.refid = self.ids[0]
-
-        if self.all_cuda:
-            self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in range(n)]
-            self.ref = globals()[opt['m']](opt).cuda(self.refid)
-        else:
-            self.w = [globals()[opt['m']](opt) for i in range(n)]
-            self.ref = globals()[opt['m']](opt)
-
-    def forward(self, ids, xs, ys):
-        xs = [[a] for a in xs]
-        if self.all_cuda:
-            ws = [self.w[ii] for ii in ids]
-        else:
-            ws = [self.w[ii].cuda(self.ids[ii]) for ii in ids]
-
-        fs = parallel_apply(ws, xs)
-        return fs
-
-    def backward(self, ids, fs):
-        f = sum(gather(fs, self.refid))
-        f.backward()
-        if not self.all_cuda:
-            for ii in ids:
-                self.w[ii].cpu()
-
-    def train(self):
-        super(FederatedModel, self).train()
-        self.ref.train()
-        for i in range(self.n):
-            self.w[i].train()
-
-    def eval(self):
-        super(FederatedModel, self).eval()
-        self.ref.eval()
-        self.ref.cuda(self.refid)
