@@ -132,14 +132,12 @@ def accuracy(output, target, topk=(1,)):
 def clerr(output, target, topk=(1,)):
     return [100.0 - a for a in accuracy(output, target, topk)]
 
-def setup(t=4, s=42, gpus=[0,1,2]):
+def setup(t=4, s=42):
     th.set_num_threads(t)
     np.random.seed(s)
     th.manual_seed(s)
-    th.cuda.manual_seed(s)
-    th.cuda.manual_seed_all(s)
-    th.randn(8)
-    cudnn.benchmark = True
+    if th.cuda.device_count() > 0:
+        th.cuda.manual_seed_all(s)
 
 def dry_feed(m, loader, mid=0, opt=None):
     def set_dropout(cache = None, p=0):

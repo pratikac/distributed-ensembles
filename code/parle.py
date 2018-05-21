@@ -12,6 +12,8 @@ cudnn.benchmark = True
 
 import sys, argparse, random, pdb, os
 from copy import deepcopy
+import pprint
+pp = pprint.PrettyPrinter(indent=4)
 
 from exptutils import *
 import models, loader
@@ -28,11 +30,11 @@ opt = add_args([
 ['--gpus', '', 'groups of gpus'],
 ['--frac', 1.0, 'fraction of dataset'],
 ['-b', 128, 'batch_size'],
-['--augment', False, 'data augmentation'],
+['--augment', True, 'data augmentation'],
 ['-e', 0, 'start epoch'],
 ['-d', -1., 'dropout'],
 ['--l2', -1., 'ell-2'],
-['-B', 100, 'max epochs'],
+['-B', 5, 'max epochs'],
 ['--lr', 0.1, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
 ['--Ls', '', 'schedule for Langevin steps'],
@@ -53,30 +55,35 @@ ngpus = th.cuda.device_count()
 gpus = [i if opt['g'] >= ngpus else opt['g'] for i in range(ngpus)]
 if not opt['gpus'] == '':
     gpus = json.loads(opt['gpus'])
-setup(t=4, s=opt['s'], gpus=gpus)
+setup(t=4, s=opt['s'])
 opt['g'] = gpus[int(opt['r'] % len(gpus))]
 th.cuda.set_device(opt['g'])
 
-opt['B'], opt['l2'] = 5, -1.0
-opt['rho'] = opt['rho']*opt['L']*opt['n']
+build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
+                            'f','v', 'augment', 't', 'nw', 'save_all', 'd',
+                            'save','e','l2','r', 'lr', 'Ls', 'b', 'gamma', 'rho'])
+logger = create_logger(opt)
+if opt['r'] == 0:
+    pp.pprint(opt)
 
-print(opt)
+# normalize rho
+opt['rho'] = opt['rho']*opt['L']*opt['n']
 
 # initialize distributed comm
 os.environ['MASTER_ADDR'] = 'localhost'
 os.environ['MASTER_PORT'] = '29500'
 dist.init_process_group('gloo', rank=opt['r'], world_size=opt['n'])
 
-dataset, augment = getattr(loader, opt['dataset'])(opt)
-train_ds = loader.get_inf_iterator(dataset['train'], augment, bsz=opt['b'])
-train_noinf_ds = loader.get_iterator(dataset['train'], augment, bsz=opt['b'])
-val_ds = loader.get_iterator(dataset['val'], lambda x: x, bsz=opt['b'], shuffle=False)
+if not opt['dataset'] == 'imagenet':
+    dataset, augment = getattr(loader, opt['dataset'])(opt)
+    loaders = loader.get_loaders(dataset, augment, opt)
+else:
+    loaders = getattr(loader, opt['dataset'])(opt)
 
-model = getattr(models, opt['m'])(opt)
-criterion = nn.CrossEntropyLoss()
+loader = loaders[opt['r']]
 
-model = model.cuda()
-criterion = criterion.cuda()
+model = getattr(models, opt['m'])(opt).cuda()
+criterion = nn.CrossEntropyLoss().cuda()
 
 def parle_step(sync=False):
     eps = 1e-3
@@ -156,24 +163,26 @@ def parle_step(sync=False):
     s['t'] += 1
 
 def train(e):
+    opt['lr'] = lrschedule(opt, e, logger)
+    opt['L'] = Lschedule(opt, e, logger)
+
     model.train()
 
-    opt['nb'] = len(train_noinf_ds)
-    train_iter = train_ds.__iter__()
+    opt['nb'] = int(len(loader['train_full'])*opt['frac'])
+    train_iter = loader['train'].__iter__()
 
     loss = tnt.meter.AverageValueMeter()
     top1 = tnt.meter.ClassErrorMeter()
 
     for b in range(opt['nb']):
         for l in range(opt['L']):
-            x,y = next(train_iter)
-            # try:
-            #     x,y = next(train_iter)
-            # except StopIteration:
-            #     train_iter = train_ds.__iter__()
-            #     x,y = next(train_iter)
+            try:
+                x,y = next(train_iter)
+            except StopIteration:
+                train_iter = loader['train'].__iter__()
+                x,y = next(train_iter)
 
-            x, y = Variable(x), Variable(y)
+            x, y = Variable(x).cuda(), Variable(y).cuda()
 
             model.zero_grad()
             yh = model(x)
@@ -217,9 +226,8 @@ def dry_feed(m):
 
     m.train()
     cache = set_dropout()
-    train_iter = get_iterator(True)
     with th.no_grad():
-        for _, (x,y) in enumerate(train_noinf_ds):
+        for _, (x,y) in enumerate(loader['train_full']):
             x = Variable(x).cuda()
             m(x)
     set_dropout(cache)
@@ -235,7 +243,7 @@ def validate(e):
     loss = tnt.meter.AverageValueMeter()
     top1 = tnt.meter.ClassErrorMeter()
 
-    for b, (x,y) in enumerate(val_ds):
+    for b, (x,y) in enumerate(loader['val']):
         x, y = Variable(x).cuda(), Variable(y).cuda()
 
         yh = m(x)
