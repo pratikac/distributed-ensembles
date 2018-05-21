@@ -73,7 +73,7 @@ if opt['n'] > 1:
     # initialize distributed comm
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '29500'
-    dist.init_process_group('gloo', rank=opt['r'], world_size=opt['n'])
+    dist.init_process_group('nccl', rank=opt['r'], world_size=opt['n'])
 
 if not opt['dataset'] == 'imagenet':
     dataset, augment = getattr(loader, opt['dataset'])(opt)
@@ -126,7 +126,7 @@ def parle_step(sync=False):
         if opt['n'] > 1:
             for p in model.parameters():
                 s['cache'][p].copy_(xa[p])
-                dist.all_reduce(s['cache'][p], op=dist.reduce_op.SUM)
+                dist.reduce(s['cache'][p], dst=0, op=dist.reduce_op.SUM)
 
             if r == 0:
                 for p in model.parameters():
@@ -169,23 +169,6 @@ def parle_step(sync=False):
     s['t'] += 1
 
 
-from line_profiler import LineProfiler
-def do_profile(follow=[]):
-    def inner(func):
-        def profiled_func(*args, **kwargs):
-            try:
-                profiler = LineProfiler()
-                profiler.add_function(func)
-                for f in follow:
-                    profiler.add_function(f)
-                profiler.enable_by_count()
-                return func(*args, **kwargs)
-            finally:
-                profiler.print_stats()
-        return profiled_func
-    return inner
-
-
 # @do_profile(follow=[parle_step])
 def train(e):
     opt['lr'] = lrschedule(opt, e, logger)
@@ -197,7 +180,7 @@ def train(e):
     train_iter = loader['train'].__iter__()
 
     loss = tnt.meter.AverageValueMeter()
-    top1 = tnt.meter.ClassErrorMeter()
+    top1 = tnt.meter.AverageValueMeter()
 
     for b in range(opt['nb']):
         for l in range(opt['L']):
@@ -219,7 +202,7 @@ def train(e):
                     p.grad.data.add_(opt['l2'], p.data)
 
             if l == 0:
-                top1.add(yh.data, y.data)
+                top1.add(clerr(yh.data, y.data))
                 loss.add(f.item())
 
                 if b % 100 == 0 and b > 0:
@@ -266,7 +249,7 @@ def validate(e):
     m.eval()
 
     loss = tnt.meter.AverageValueMeter()
-    top1 = tnt.meter.ClassErrorMeter()
+    top1 = tnt.meter.AverageValueMeter()
 
     for b, (x,y) in enumerate(loader['val']):
         x, y = Variable(x).cuda(async=True), Variable(y).cuda(async=True)
@@ -274,7 +257,7 @@ def validate(e):
         yh = m(x)
         f = criterion(yh, y)
 
-        top1.add(yh.data, y.data)
+        top1.add(clerr(yh.data, y.data))
         loss.add(f.item())
 
     r = dict(f=loss.value()[0], top1=top1.value()[0])

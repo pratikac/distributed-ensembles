@@ -124,13 +124,14 @@ def accuracy(output, target, topk=(1,)):
     res = []
     for k in topk:
         correct_k = correct[:k].view(-1).float().sum(0)
-        res.append(correct_k.mul_(100.0 / batch_size)[0])
-    if len(topk) == 1:
-        return res[0]
+        res.append(correct_k.mul_(100.0 / batch_size).item())
     return res
 
 def clerr(output, target, topk=(1,)):
-    return [100.0 - a for a in accuracy(output, target, topk)]
+    r = [100.0 - a for a in accuracy(output, target, topk)]
+    if len(r) == 1:
+        return r[0]
+    return r
 
 def setup(t=4, s=42):
     th.set_num_threads(t)
@@ -201,3 +202,19 @@ class AverageMeters(object):
     def reset(self):
         for k in ks:
             self.m[k].reset()
+
+from line_profiler import LineProfiler
+def do_profile(follow=[]):
+    def inner(func):
+        def profiled_func(*args, **kwargs):
+            try:
+                profiler = LineProfiler()
+                profiler.add_function(func)
+                for f in follow:
+                    profiler.add_function(f)
+                profiler.enable_by_count()
+                return func(*args, **kwargs)
+            finally:
+                profiler.print_stats()
+        return profiled_func
+    return inner
