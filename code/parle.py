@@ -259,10 +259,11 @@ def dry_feed(m):
     set_dropout(cache)
 
 def validate(e):
-    m = deepcopy(model)
-    for p,q in zip(m.parameters(), model.parameters()):
-        p.data.copy_(opt['state']['x'][q])
+    # m = deepcopy(model)
+    # for p,q in zip(m.parameters(), model.parameters()):
+    #     p.data.copy_(opt['state']['x'][q])
 
+    m = model
     dry_feed(m)
     m.eval()
 
