@@ -26,5 +26,12 @@ for i in range(opt['n']):
     p = subprocess.Popen([str(sys.executable)] + args)
     workers.append(p)
 
-for p in workers:
-    p.wait()
+try:
+    for p in workers:
+        p.wait()
+
+except KeyboardInterrupt:
+    print('Killing all subprocess')
+    for p in workers:
+        p.kill()
+    sys.exit()

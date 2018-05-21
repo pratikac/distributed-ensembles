@@ -59,13 +59,6 @@ setup(t=4, s=opt['s'])
 opt['g'] = gpus[int(opt['r'] % len(gpus))]
 th.cuda.set_device(opt['g'])
 
-build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
-                            'f','v', 'augment', 't', 'nw', 'save_all', 'd',
-                            'save','e','l2','r', 'lr', 'Ls', 'b', 'gamma', 'rho'])
-logger = create_logger(opt)
-if opt['r'] == 0:
-    pp.pprint(opt)
-
 # normalize rho
 opt['rho'] = opt['rho']*opt['L']*opt['n']
 
@@ -85,6 +78,13 @@ loader = loaders[opt['r']]
 
 model = getattr(models, opt['m'])(opt).cuda()
 criterion = nn.CrossEntropyLoss().cuda()
+
+build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
+                            'f','v', 'augment', 't', 'nw', 'save_all', 'd',
+                            'save','e','l2','r', 'lr', 'Ls', 'b', 'gamma', 'rho'])
+logger = create_logger(opt)
+if opt['r'] == 0:
+    pp.pprint(opt)
 
 def parle_step(sync=False):
     eps = 1e-3
@@ -166,8 +166,7 @@ def parle_step(sync=False):
 
             za[p].mul_(alpha).add_(1-alpha, p.data)
 
-    s['t'] += 1
-
+        s['t'] += 1
 
 # @do_profile(follow=[parle_step])
 def train(e):
@@ -272,5 +271,3 @@ for e in range(opt['B']):
 
     if opt['r'] == 0:
         validate(e)
-
-    opt['lr'] /= 10.0
