@@ -61,7 +61,7 @@ opt['g'] = gpus[int(opt['r'] % len(gpus))]
 th.cuda.set_device(opt['g'])
 
 # normalize rho
-opt['rho'] = opt['rho']*opt['L']*opt['n']
+opt['rho'] = opt['rho']*opt['L']
 
 if opt['n'] > 1:
     # initialize distributed comm
@@ -119,9 +119,9 @@ def parle_step(sync=False):
     za, muy, mux, xa, x, cache = s['za'], s['muy'], s['mux'], \
         s['xa'], s['x'], s['cache']
 
-    gamma = opt['gamma']*(1 + 0.5/nb)**(t // opt['L'])
-    rho = opt['rho']*(1 + 0.5/nb)**(t // opt['L'])
-    gamma, rho = min(gamma, 1), min(rho, 10)
+    gamma = opt['gamma']*(1 + 0.5/nb)**t
+    rho = opt['rho']*(1 + 0.5/nb)**t
+    gamma, rho = min(gamma, 1), min(rho, 1)
 
     def sync_with_master(xa, x):
         if opt['n'] > 1:
@@ -156,18 +156,18 @@ def parle_step(sync=False):
 
             xa[p].copy_(p.data)
         sync_with_master(xa, x)
+        s['t'] += 1
     else:
+        llr = 0.1
         # entropy-sgd iterations
         for p in model.parameters():
             p.grad.data.add_(gamma, p.data - xa[p])
 
             muy[p].mul_(mom).add_(p.grad.data)
             p.grad.data.add_(muy[p])
-            p.data.add_(-lr, p.grad.data)
+            p.data.add_(-llr, p.grad.data)
 
             za[p].mul_(alpha).add_(1-alpha, p.data)
-
-        s['t'] += 1
 
 # @do_profile(follow=[parle_step])
 def train(e):
