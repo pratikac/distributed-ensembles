@@ -9,6 +9,7 @@ from torch.autograd import Variable
 
 import torch.backends.cudnn as cudnn
 cudnn.benchmark = True
+from timeit import default_timer as timer
 
 import sys, argparse, random, pdb, os
 from copy import deepcopy
@@ -178,10 +179,12 @@ def train(e):
     opt['nb'] = int(len(loader['train_full'])*opt['frac'])
     train_iter = loader['train'].__iter__()
 
-    loss = tnt.meter.AverageValueMeter()
-    top1 = tnt.meter.AverageValueMeter()
+    meters = AverageMeters(['f', 'top1', 'top5', 'dt'])
 
     for b in range(opt['nb']):
+
+        loss, top1, top5 = None, None, None
+        _dt = timer()
         for l in range(opt['L']):
             try:
                 x,y = next(train_iter)
@@ -201,20 +204,36 @@ def train(e):
                     p.grad.data.add_(opt['l2'], p.data)
 
             if l == 0:
-                top1.add(clerr(yh.data, y.data))
-                loss.add(f.item())
-
-                if b % 100 == 0 and b > 0:
-                    print('[%03d][%03d/%03d] %.3f %.3f%%'%(e, b, opt['nb'], \
-                            loss.value()[0], top1.value()[0]))
+                top1, top5 = clerr(yh.data, y.data, (1,5))
+                loss = f.item()
 
             parle_step()
 
         parle_step(sync=True)
+        _dt = timer() - _dt
+        meters.add(dict(f=loss, top1=top1, top5=top5, dt=_dt))
 
-    r = dict(f=loss.value()[0], top1=top1.value()[0])
-    print('+[%02d] %.3f %.3f%%'%(e, r['f'], r['top1']))
-    return r
+        mm = meters.value()
+        if opt['l'] and bi % 25 ==0 and bi > 0:
+            s = dict(i=bi + e*opt['nb'], e=e, train=True)
+            s.update(**mm)
+            logger.info('[LOG] ' + json.dumps(s))
+
+        bif = int(5/mm['dt'])+1
+        if b % bif == 0 and b > 0:
+            print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f %2.2f%% %2.2f%%'))%(_dt,
+                e,b,opt['nb'], mm['f'], mm['top1'], mm['top5']))
+
+    mm = meters.value()
+    if opt['l']:
+        s = dict(e=e, i=0, train=True)
+        s.update(**mm)
+        logger.info('[SUMMARY] ' + json.dumps(s))
+        logger.info('')
+
+    print((color('blue', '++[%2d] %2.4f %2.2f%% %2.2f%% [%2.2fs]'))% (e, mm['f'], mm['top1'], mm['top5'], meters.m['dt'].sum))
+    print()
+    return mm
 
 def dry_feed(m):
     def set_dropout(cache = None, p=0):
@@ -247,21 +266,33 @@ def validate(e):
     dry_feed(m)
     m.eval()
 
-    loss = tnt.meter.AverageValueMeter()
-    top1 = tnt.meter.AverageValueMeter()
+    meters = AverageMeters(['f', 'top1', 'top5'])
 
     for b, (x,y) in enumerate(loader['val']):
         x, y = Variable(x).cuda(async=True), Variable(y).cuda(async=True)
 
         yh = m(x)
-        f = criterion(yh, y)
+        f = criterion(yh, y).item()
 
-        top1.add(clerr(yh.data, y.data))
-        loss.add(f.item())
+        top1, top5 = clerr(yh.data, y.data, (1,5))
+        meters.add(dict(f=f, top1=top1, top5=top5))
 
-    r = dict(f=loss.value()[0], top1=top1.value()[0])
-    print('*[%02d] %.3f %.3f%%'%(e, r['f'], r['top1']))
-    return r
+
+        mm = meters.value()
+        if b % 100 == 0 and b > 0:
+            print((color('red', '*[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, b, \
+                    mm['f'], mm['top1'], mm['top5']))
+
+    mm = meters.value()
+    if opt['l']:
+        s = dict(e=e, i=0, val=True)
+        s.update(**mm)
+        logger.info('[SUMMARY] ' + json.dumps(s))
+        logger.info('')
+
+    print((color('red', '**[%2d] %2.4f %2.4f%% %2.4f%%\n'))%(e, mm['f'], mm['top1'], mm['top5']))
+    print('')
+    return mm
 
 for e in range(opt['B']):
     if opt['r'] == 0:
