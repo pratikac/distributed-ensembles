@@ -204,8 +204,6 @@ def train(e):
 
             parle_step()
 
-        # setup value for sync
-        #opt['state']['f'][0] = loss.value()[0]
         parle_step(sync=True)
 
     r = dict(f=loss.value()[0], top1=top1.value()[0])
@@ -230,11 +228,12 @@ def dry_feed(m):
     m.train()
     cache = set_dropout()
     train_iter = get_iterator(True)
-    for _, (x,y) in enumerate(train_iter):
-        x = Variable(x.view(-1,1,28,28).float() / 255.0, volatile=True)
-        if opt['cuda']:
-            x = x.cuda(async=True)
-        m(x)
+    with th.no_grad():
+        for _, (x,y) in enumerate(train_iter):
+            x = Variable(x.view(-1,1,28,28).float() / 255.0)
+            if opt['cuda']:
+                x = x.cuda(async=True)
+            m(x)
     set_dropout(cache)
 
 def validate(e):
