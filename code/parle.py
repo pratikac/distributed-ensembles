@@ -61,7 +61,7 @@ opt['g'] = gpus[int(opt['r'] % len(gpus))]
 th.cuda.set_device(opt['g'])
 
 # normalize rho
-opt['rho'] = opt['rho']*opt['L']
+opt['rho'] = opt['rho']*opt['L']*opt['n']
 
 if opt['n'] > 1:
     # initialize distributed comm
@@ -288,11 +288,6 @@ def validate(e):
         s.update(**mm)
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
-
-    # update master with these weights
-    for p in m.parameters():
-        opt['state']['x'][p].copy_(p.data)
-        dist.broadcast(opt['state']['x'][p], src=0)
 
     print((color('red', '**[%2d] %2.4f %2.4f%% %2.4f%%\n'))%(e, mm['f'], mm['top1'], mm['top5']))
     print('')
