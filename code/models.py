@@ -669,3 +669,56 @@ class densenet(nn.Module):
 
     def forward(self, x):
         return self.m(x)
+
+class ReplicateModel(nn.Module):
+    def __init__(self, opt, gpus):
+        super(ReplicateModel, self).__init__()
+
+        self.gpus = gpus
+        self.forloop = True
+
+        self.t = 0
+        self.n = opt['n']
+        n = self.n
+
+        self.ids = [gpus[i%len(gpus)] for i in range(n)]
+        self.w = [globals()[opt['m']](opt).cuda(self.ids[i]) for i in range(n)]
+        self.refid = self.ids[0]
+        self.ref = globals()[opt['m']](opt).cuda(self.refid)
+
+        if n == 1 and opt['g'] >= len(gpus):
+            print('Using DataParallel...')
+            self.w[0] = nn.DataParallel(self.w[0], device_ids=gpus)
+            self.ref = nn.DataParallel(self.ref, device_ids=gpus)
+
+    def forward(self, xs, ys):
+        if not self.forloop:
+            xs = [[a] for a in xs]
+            return parallel_apply(self.w, xs)
+
+        yhs = [None]*self.n
+        for i in range(self.n):
+            yhs[i] = self.w[i](xs[i])
+        return yhs
+
+    def backward(self, fs):
+        if not self.forloop:
+            f = sum(gather(fs, self.refid))
+            f.backward()
+        else:
+            for i in range(self.n):
+                fs[i].backward()
+
+    def train(self):
+        self.ref.train()
+        for i in range(self.n):
+            self.w[i].train()
+
+    def eval(self):
+        self.ref.eval()
+        for i in range(self.n):
+            self.w[i].eval()
+
+    def zero_grad(self):
+        for i in range(self.n):
+            self.w[i].zero_grad()

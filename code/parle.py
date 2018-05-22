@@ -56,12 +56,9 @@ ngpus = th.cuda.device_count()
 gpus = [i if opt['g'] >= ngpus else opt['g'] for i in range(ngpus)]
 if not opt['gpus'] == '':
     gpus = json.loads(opt['gpus'])
-setup(t=4, s=opt['s'])
+setup(t=4, s=opt['s']+opt['r'])
 opt['g'] = gpus[int(opt['r'] % len(gpus))]
 th.cuda.set_device(opt['g'])
-
-# normalize rho
-opt['rho'] = opt['rho']*opt['L']*opt['n']
 
 if opt['n'] > 1:
     # initialize distributed comm
@@ -88,9 +85,8 @@ if opt['r'] == 0:
     pp.pprint(opt)
 
 def parle_step(sync=False):
-    eps = 1e-3
 
-    mom, alpha = 0.9, 0.75
+    mom, alpha = 0.9, 0.25
     lr = opt['lr']
     r = opt['r']
     nb = opt['nb']
@@ -120,29 +116,30 @@ def parle_step(sync=False):
         s['xa'], s['x'], s['cache']
 
     gamma = opt['gamma']*(1 + 0.5/nb)**t
-    rho = opt['rho']*(1 + 0.5/nb)**t
+    rho = opt['L']*opt['rho']*(1 + 0.5/nb)**t
     gamma, rho = min(gamma, 1), min(rho, 1)
 
-    def sync_with_master(xa, x):
+    # dst lives on the master
+    def sync_ref(src, dst):
         if opt['n'] > 1:
             for p in model.parameters():
-                s['cache'][p].copy_(xa[p])
+                s['cache'][p].copy_(src[p])
                 dist.reduce(s['cache'][p], dst=0, op=dist.reduce_op.SUM)
 
             if r == 0:
                 for p in model.parameters():
-                    x[p] = s['cache'][p]/float(opt['n'])
+                    dst[p] = s['cache'][p]/float(opt['n'])
 
             for p in model.parameters():
-                dist.broadcast(x[p], src=0)
+                dist.broadcast(dst[p], src=0)
         else:
             for p in model.parameters():
-                s['cache'][p].copy_(xa[p])
-                x[p].copy_(xa[p])
+                s['cache'][p].copy_(src[p])
+                dst[p].copy_(src[p])
 
     if sync:
         # add another sync, helps with large L
-        sync_with_master(za, x)
+        sync_ref(za, x)
 
         for p in model.parameters():
 
@@ -155,8 +152,10 @@ def parle_step(sync=False):
             p.data.add_(-lr, p.grad.data)
 
             xa[p].copy_(p.data)
-        sync_with_master(xa, x)
+
+        sync_ref(xa, x)
         s['t'] += 1
+
     else:
         llr = 0.1
         # entropy-sgd iterations

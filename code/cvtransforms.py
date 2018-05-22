@@ -182,4 +182,3 @@ class CutOut(object):
             img[y1:y1+th, x1:x1+tw, i] = v
 
         return img
-

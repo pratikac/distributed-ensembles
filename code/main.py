@@ -26,7 +26,7 @@ opt = add_args([
 ['-b', 128, 'batch_size'],
 ['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
-['--optim', 'ProxSGD', 'Parle | SGD | EntropySGD | ProxSGD'],
+['--optim', 'Parle', 'Parle | SGD | EntropySGD | ProxSGD'],
 ['-d', -1., 'dropout'],
 ['--l2', -1., 'ell-2'],
 ['-B', 100, 'max epochs'],
@@ -58,7 +58,7 @@ ngpus = th.cuda.device_count()
 gpus = [i if opt['g'] >= ngpus else opt['g'] for i in range(ngpus)]
 if not opt['gpus'] == '':
     gpus = json.loads(opt['gpus'])
-setup(t=4, s=opt['s'], gpus=gpus)
+setup(t=4, s=opt['s'])
 
 model = models.ReplicateModel(opt, gpus=gpus)
 criterion = nn.CrossEntropyLoss()
@@ -118,7 +118,7 @@ def train(e):
                     errs[i], errs5[i] = clerr(yhs[i].data, ys[i].data, topk=(1,5))
                 model.backward(fs)
 
-                fs = [fs[i].data[0] for i in range(n)]
+                fs = [fs[i].item() for i in range(n)]
                 return fs, errs, errs5
             return feval
 
@@ -161,21 +161,22 @@ def val(e):
     model.eval()
     meters = AverageMeters(['f', 'top1', 'top5'])
 
-    for bi, (x,y) in enumerate(loaders[0]['val']):
-        bsz = x.size(0)
+    with th.no_grad():
+        for bi, (x,y) in enumerate(loaders[0]['val']):
+            bsz = x.size(0)
 
-        xc,yc = Variable(x.cuda(rid), volatile=True), \
-                Variable(y.squeeze().cuda(rid), volatile=True)
+            xc,yc = Variable(x.cuda(rid)), \
+                    Variable(y.squeeze().cuda(rid))
 
-        yh = val_model(xc)
-        f = criterion.cuda(rid)(yh, yc).data[0]
-        err, err5 = clerr(yh.data, yc.data, topk=(1,5))
-        meters.add(dict(f=f, top1=err, top5=err5))
+            yh = val_model(xc)
+            f = criterion.cuda(rid)(yh, yc).item()
+            err, err5 = clerr(yh.data, yc.data, topk=(1,5))
+            meters.add(dict(f=f, top1=err, top5=err5))
 
-        mm = meters.value()
-        if bi % 100 == 0 and bi > 0:
-            print((color('red', '*[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, bi, \
-                    mm['f'], mm['top1'], mm['top5']))
+            mm = meters.value()
+            if bi % 100 == 0 and bi > 0:
+                print((color('red', '*[%d][%2d] %2.4f %2.4f%% %2.4f%%'))%(e, bi, \
+                        mm['f'], mm['top1'], mm['top5']))
 
     mm = meters.value()
     if opt['l']:
