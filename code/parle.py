@@ -56,12 +56,11 @@ ngpus = th.cuda.device_count()
 gpus = [i if opt['g'] >= ngpus else opt['g'] for i in range(ngpus)]
 if not opt['gpus'] == '':
     gpus = json.loads(opt['gpus'])
-setup(t=4, s=opt['s']+opt['r'])
+setup(s=opt['s']+opt['r'])
 opt['g'] = gpus[int(opt['r'] % len(gpus))]
 th.cuda.set_device(opt['g'])
 
 if opt['n'] > 1:
-    # initialize distributed comm
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '29500'
     dist.init_process_group('nccl', rank=opt['r'], world_size=opt['n'])

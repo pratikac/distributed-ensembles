@@ -133,8 +133,7 @@ def clerr(output, target, topk=(1,)):
         return r[0]
     return r
 
-def setup(t=4, s=42):
-    th.set_num_threads(t)
+def setup(t=1, s=42):
     np.random.seed(s)
     th.manual_seed(s)
     if th.cuda.device_count() > 0:
