@@ -148,7 +148,7 @@ def cifar_helper(opt, s):
         cv.RandomHorizontalFlip(),
         cv.Pad(4, 2),
         cv.RandomCrop(sz),
-        cutout,
+        # cutout,
         lambda x: x.transpose(2,0,1),
         th.from_numpy
         ])
