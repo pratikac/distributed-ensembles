@@ -85,7 +85,7 @@ if opt['r'] == 0:
 
 def parle_step(sync=False):
 
-    mom, alpha = 0.9, 0.25
+    mom, alpha = 0.9, 0.0
     lr = opt['lr']
     r = opt['r']
     nb = opt['nb']
@@ -115,7 +115,7 @@ def parle_step(sync=False):
         s['xa'], s['x'], s['cache']
 
     gamma = opt['gamma']*(1 + 0.5/nb)**t
-    rho = opt['L']*opt['rho']*(1 + 0.5/nb)**t
+    rho = opt['rho']*(1 + 0.5/nb)**t
     gamma, rho = min(gamma, 1), min(rho, 1)
 
     # dst lives on the master
@@ -144,7 +144,7 @@ def parle_step(sync=False):
 
             # elastic-sgd term
             p.grad.data.zero_()
-            p.grad.data.add_(1, xa[p] - za[p]).add_(rho, xa[p] - x[p])
+            p.grad.data.add_(1, xa[p] - za[p]).add_(rho*opt['L'], xa[p] - x[p])
 
             mux[p].mul_(mom).add_(p.grad.data)
             p.grad.data.add_(mux[p])

@@ -328,28 +328,8 @@ class caddtable_t(nn.Module):
 
 class wideresnet(nn.Module):
     name = 'wideresnet'
-    @staticmethod
-    def block(ci, co, s, p=0.):
-        h = nn.Sequential(
-                nn.BatchNorm2d(ci),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(ci, co, kernel_size=3, stride=s, padding=1, bias=False),
-                nn.BatchNorm2d(co),
-                nn.ReLU(inplace=True),
-                nn.Dropout(p),
-                nn.Conv2d(co, co, kernel_size=3, stride=1, padding=1, bias=False))
-        if ci == co:
-            return caddtable_t(h, nn.Sequential())
-        else:
-            return caddtable_t(h,
-                        nn.Conv2d(ci, co, kernel_size=1, stride=s, padding=0, bias=False))
 
-    @staticmethod
-    def netblock(nl, ci, co, blk, s, p=0.):
-        ls = [blk((i==0 and ci or co), co, (i==0 and s or 1), p) for i in range(nl)]
-        return nn.Sequential(*ls)
-
-    def __init__(self, opt):
+    def __init__(self, opt, microbn=False):
         super(wideresnet, self).__init__()
 
         if opt['d'] < 0:
@@ -365,12 +345,38 @@ class wideresnet(nn.Module):
         assert (depth-4)%6 == 0, 'Incorrect depth'
         n = (depth-4)//6
 
+        if microbn:
+            bn1, bn2 = MicroBatchNorm1d, MicroBatchNorm2d
+        else:
+            bn1, bn2 = nn.BatchNorm1d, nn.BatchNorm2d
+
+        @staticmethod
+        def block(ci, co, s, p=0.):
+            h = nn.Sequential(
+                    bn2(ci),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(ci, co, kernel_size=3, stride=s, padding=1, bias=False),
+                    bn2(co),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(p),
+                    nn.Conv2d(co, co, kernel_size=3, stride=1, padding=1, bias=False))
+            if ci == co:
+                return caddtable_t(h, nn.Sequential())
+            else:
+                return caddtable_t(h,
+                            nn.Conv2d(ci, co, kernel_size=1, stride=s, padding=0, bias=False))
+
+        @staticmethod
+        def netblock(nl, ci, co, blk, s, p=0.):
+            ls = [blk((i==0 and ci or co), co, (i==0 and s or 1), p) for i in range(nl)]
+            return nn.Sequential(*ls)
+
         self.m = nn.Sequential(
                 nn.Conv2d(3, nc[0], kernel_size=3, stride=1, padding=1, bias=False),
                 self.netblock(n, nc[0], nc[1], self.block, 1, d),
                 self.netblock(n, nc[1], nc[2], self.block, 2, d),
                 self.netblock(n, nc[2], nc[3], self.block, 2, d),
-                nn.BatchNorm2d(nc[3]),
+                bn2(nc[3]),
                 nn.ReLU(inplace=True),
                 nn.AvgPool2d(8),
                 View(nc[3]),
@@ -573,40 +579,7 @@ class cattable_t(nn.Module):
 class densenet(nn.Module):
     name = 'densenet'
 
-    @staticmethod
-    def bottleneck(nc, gr, p):
-        ic = 4*gr
-        h = nn.Sequential(
-            nn.BatchNorm2d(nc),
-            nn.ReLU(True),
-            nn.Conv2d(nc, ic, kernel_size=1, bias=False),
-            nn.BatchNorm2d(ic),
-            nn.ReLU(True),
-            nn.Conv2d(ic, gr, kernel_size=3, padding=1, bias=False),
-            nn.Dropout(p),
-            )
-        return cattable_t(h, nn.Sequential())
-
-    @staticmethod
-    def basic(nc, gr, p):
-        h = nn.Sequential(
-            nn.BatchNorm2d(nc),
-            nn.ReLU(True),
-            nn.Conv2d(nc, gr, kernel_size=3, padding=1, bias=False),
-            nn.Dropout(p)
-            )
-        return cattable_t(h, nn.Sequential())
-
-    @staticmethod
-    def transition(nci, nco, p):
-        return nn.Sequential(
-            nn.BatchNorm2d(nci),
-            nn.ReLU(True),
-            nn.Conv2d(nci, nco, kernel_size=1, bias=False),
-            nn.Dropout(p),
-            nn.AvgPool2d(2))
-
-    def __init__(self, opt):
+    def __init__(self, opt, microbn=False):
         super(densenet, self).__init__()
 
         gr = opt.get('gr', 12)
@@ -633,6 +606,45 @@ class densenet(nn.Module):
             ncis.append(nc)
             ncos.append(int(math.floor(nc*reduction)))
 
+
+        if microbn:
+            bn1, bn2 = MicroBatchNorm1d, MicroBatchNorm2d
+        else:
+            bn1, bn2 = nn.BatchNorm1d, nn.BatchNorm2d
+
+        @staticmethod
+        def bottleneck(nc, gr, p):
+            ic = 4*gr
+            h = nn.Sequential(
+                bn2(nc),
+                nn.ReLU(True),
+                nn.Conv2d(nc, ic, kernel_size=1, bias=False),
+                bn2(ic),
+                nn.ReLU(True),
+                nn.Conv2d(ic, gr, kernel_size=3, padding=1, bias=False),
+                nn.Dropout(p),
+                )
+            return cattable_t(h, nn.Sequential())
+
+        @staticmethod
+        def basic(nc, gr, p):
+            h = nn.Sequential(
+                bn2(nc),
+                nn.ReLU(True),
+                nn.Conv2d(nc, gr, kernel_size=3, padding=1, bias=False),
+                nn.Dropout(p)
+                )
+            return cattable_t(h, nn.Sequential())
+
+        @staticmethod
+        def transition(nci, nco, p):
+            return nn.Sequential(
+                bn2(nci),
+                nn.ReLU(True),
+                nn.Conv2d(nci, nco, kernel_size=1, bias=False),
+                nn.Dropout(p),
+                nn.AvgPool2d(2))
+
         def denseblock(nc, gr, nblk, blk, p):
             wl = self.bottleneck if is_bottleneck else self.basic
             ls = [wl(nc + i*gr, gr, p) for i in range(nblk)]
@@ -645,7 +657,7 @@ class densenet(nn.Module):
                 denseblock(ncos[1], gr, nblk, is_bottleneck, opt['d']),
                 self.transition(ncis[2], ncos[2], opt['d']),
                 denseblock(ncos[2], gr, nblk, is_bottleneck, opt['d']),
-                nn.BatchNorm2d(ncis[3]),
+                bn2(ncis[3]),
                 nn.ReLU(True),
                 nn.AvgPool2d(8),
                 View(ncis[3]),
