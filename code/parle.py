@@ -151,7 +151,6 @@ def parle_step(sync=False):
         sync_ref(za, x)
 
         for p in model.parameters():
-
             # elastic-sgd term
             p.grad.data.zero_()
             p.grad.data.add_(1.0, xa[p] - za[p]).add_(rho*opt['L'], xa[p] - x[p])
