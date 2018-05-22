@@ -39,6 +39,7 @@ opt = add_args([
 ['--lr', 0.1, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
 ['--Ls', '', 'schedule for Langevin steps'],
+['--burnin', 1, 'burnin for small batches'],
 ['-L', 25, 'sgld iterations'],
 ['--gamma', 0.01, 'gamma'],
 ['--rho', 0.01, 'rho'],
@@ -67,13 +68,22 @@ if opt['n'] > 1:
 
 if not opt['dataset'] == 'imagenet':
     dataset, augment = getattr(loader, opt['dataset'])(opt)
-    loaders = loader.get_loaders(dataset, augment, opt)
+    ds_bsz = loader.get_dataset(dataset, augment, opt)
 else:
-    loaders = getattr(loader, opt['dataset'])(opt)
+    ds_bsz = getattr(loader, opt['dataset'])(opt)
+ds_bsz = ds_bsz[opt['r']]
 
-loader = loaders[opt['r']]
+bsz = opt['b']
+opt['b'] = 128
+if not opt['dataset'] == 'imagenet':
+    dataset, augment = getattr(loader, opt['dataset'])(opt)
+    ds_128 = loader.get_dataset(dataset, augment, opt)
+else:
+    ds_128 = getattr(loader, opt['dataset'])(opt)
+ds_128 = ds_128[opt['r']]
+opt['b'] = bsz
 
-model = getattr(models, opt['m'])(opt).cuda()
+model = getattr(models, opt['m'])(opt, microbn=True).cuda()
 criterion = nn.CrossEntropyLoss().cuda()
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
@@ -144,7 +154,7 @@ def parle_step(sync=False):
 
             # elastic-sgd term
             p.grad.data.zero_()
-            p.grad.data.add_(1, xa[p] - za[p]).add_(rho*opt['L'], xa[p] - x[p])
+            p.grad.data.add_(1.0, xa[p] - za[p]).add_(rho*opt['L'], xa[p] - x[p])
 
             mux[p].mul_(mom).add_(p.grad.data)
             p.grad.data.add_(mux[p])
@@ -156,14 +166,13 @@ def parle_step(sync=False):
         s['t'] += 1
 
     else:
-        llr = 0.1
         # entropy-sgd iterations
         for p in model.parameters():
             p.grad.data.add_(gamma, p.data - xa[p])
 
             muy[p].mul_(mom).add_(p.grad.data)
             p.grad.data.add_(muy[p])
-            p.data.add_(-llr, p.grad.data)
+            p.data.add_(-lr, p.grad.data)
 
             za[p].mul_(alpha).add_(1-alpha, p.data)
 
@@ -174,8 +183,12 @@ def train(e):
 
     model.train()
 
-    opt['nb'] = int(len(loader['train_full'])*opt['frac'])
-    train_iter = loader['train'].__iter__()
+    ds = ds_bsz
+    if e < opt['burnin']:
+        opt['lr'] = opt['lr']*((e+1)/float(opt['burnin']))
+
+    opt['nb'] = int(len(ds['train_full'])*opt['frac'])
+    train_iter = ds['train'].__iter__()
 
     meters = AverageMeters(['f', 'top1', 'top5', 'dt'])
 
@@ -187,7 +200,7 @@ def train(e):
             try:
                 x,y = next(train_iter)
             except StopIteration:
-                train_iter = loader['train'].__iter__()
+                train_iter = ds['train'].__iter__()
                 x,y = next(train_iter)
 
             x, y = Variable(x).cuda(async=True), Variable(y).cuda(async=True)
@@ -251,7 +264,7 @@ def dry_feed(m):
     m.train()
     cache = set_dropout()
     with th.no_grad():
-        for _, (x,y) in enumerate(loader['train_full']):
+        for _, (x,y) in enumerate(ds_128['train_full']):
             x = Variable(x).cuda(async=True)
             m(x)
     set_dropout(cache)
@@ -266,7 +279,7 @@ def validate(e):
 
     meters = AverageMeters(['f', 'top1', 'top5'])
 
-    for b, (x,y) in enumerate(loader['val']):
+    for b, (x,y) in enumerate(ds_bsz['val']):
         x, y = Variable(x).cuda(async=True), Variable(y).cuda(async=True)
 
         yh = m(x)

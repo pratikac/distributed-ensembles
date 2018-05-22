@@ -44,7 +44,7 @@ def shuffle_data(d):
     d['x'] = th.index_select(x, 0, idx)
     d['y'] = th.index_select(y, 0, idx)
 
-def get_loaders(d, transforms, opt):
+def get_dataset(d, transforms, opt):
     if not opt['augment']:
         transforms = lambda x: x
 
