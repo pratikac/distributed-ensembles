@@ -91,7 +91,7 @@ if opt['bbsz'] > 0:
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
                             'f','v', 'augment', 't', 'nw', 'save_all', 'd',
-                            'save','e','l2','r', 'lr', 'Ls', 'b', 'gamma', 'rho'])
+                            'save','e','l2','r', 'lr', 'Ls', 'b', 'resume', 'frac', 'burnin', 'bbsz', 'L'])
 logger = create_logger(opt)
 if opt['r'] == 0:
     pp.pprint(opt)
@@ -193,6 +193,9 @@ def train(e):
     train_iter = ds['train'].__iter__()
 
     meters = AverageMeters(['f', 'top1', 'top5', 'dt'])
+    buf = dict( f=th.FloatTensor(1).zero_().cuda(),
+                top1=th.FloatTensor(1).zero_().cuda(),
+                top5=th.FloatTensor(1).zero_().cuda())
 
     for b in range(opt['nb']):
 
@@ -222,18 +225,25 @@ def train(e):
             if l == 0:
                 top1, top5 = clerr(yh.data, y.data, (1,5))
                 loss = f.item()
+                buf['f'][0], buf['top1'][0], buf['top5'][0] = loss, top1, top5
 
             parle_step()
 
         parle_step(sync=True)
         _dt = timer() - _dt
-        meters.add(dict(f=loss, top1=top1, top5=top5, dt=_dt))
+
+        for k in buf:
+            dist.reduce(buf[k], dst=0, op=dist.reduce_op.SUM)
+            buf[k] /= float(opt['n'])
+
+        meters.add(dict(f=buf['f'].item(), top1=buf['top1'].item(), top5=buf['top5'].item(), dt=_dt))
 
         mm = meters.value()
         if opt['l'] and b % 25 == 0 and b > 0:
-            s = dict(i=b + e*opt['nb'], e=e, train=True)
-            s.update(**mm)
-            logger.info('[LOG] ' + json.dumps(s))
+            if opt['r'] == 0:
+                s = dict(i=b + e*opt['nb'], e=e, train=True)
+                s.update(**mm)
+                logger.info('[LOG] ' + json.dumps(s))
 
         bif = int(5/mm['dt'])+1
         if b % bif == 0 and b > 0:
@@ -241,7 +251,7 @@ def train(e):
                 e,b,opt['nb'], mm['f'], mm['top1'], mm['top5']))
 
     mm = meters.value()
-    if opt['l']:
+    if opt['l'] and opt['r'] == 0:
         s = dict(e=e, i=0, train=True)
         s.update(**mm)
         logger.info('[SUMMARY] ' + json.dumps(s))
