@@ -31,6 +31,7 @@ opt = add_args([
 ['--gpus', '', 'groups of gpus'],
 ['--frac', 1.0, 'fraction of dataset'],
 ['-b', 128, 'batch_size'],
+['--bbsz', 0, 'very large batch sizes'],
 ['--augment', True, 'data augmentation'],
 ['-e', 0, 'start epoch'],
 ['-d', -1., 'dropout'],
@@ -85,6 +86,8 @@ opt['b'] = bsz
 
 model = getattr(models, opt['m'])(opt, microbn=True).cuda()
 criterion = nn.CrossEntropyLoss().cuda()
+if opt['bbsz'] > 0:
+    bbsz_model = models.BBszModel(opt, model, criterion, mbsz=opt['bbsz'])
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
                             'f','v', 'augment', 't', 'nw', 'save_all', 'd',
@@ -204,14 +207,17 @@ def train(e):
 
             x, y = Variable(x).cuda(async=True), Variable(y).cuda(async=True)
 
-            model.zero_grad()
-            yh = model(x)
-            f = criterion(yh, y)
-            f.backward()
+            if opt['bbsz'] > 0:
+                f, yh = bbsz_model.forward_backward(x, y)
+            else:
+                model.zero_grad()
+                yh = model(x)
+                f = criterion(yh, y)
+                f.backward()
 
-            if opt['l2'] > 0:
-                for p in model.parameters():
-                    p.grad.data.add_(opt['l2'], p.data)
+                if opt['l2'] > 0:
+                    for p in model.parameters():
+                        p.grad.data.add_(opt['l2'], p.data)
 
             if l == 0:
                 top1, top5 = clerr(yh.data, y.data, (1,5))

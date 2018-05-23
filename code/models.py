@@ -699,7 +699,7 @@ class ReplicateModel(nn.Module):
         self.ref = globals()[opt['m']](opt).cuda(self.refid)
 
         if n == 1 and opt['g'] >= len(gpus):
-            print('Using DataParallel...')
+            print('[Using DataParallel]')
             self.w[0] = nn.DataParallel(self.w[0], device_ids=gpus)
             self.ref = nn.DataParallel(self.ref, device_ids=gpus)
 
@@ -734,3 +734,60 @@ class ReplicateModel(nn.Module):
     def zero_grad(self):
         for i in range(self.n):
             self.w[i].zero_grad()
+
+class BBszModel(nn.Module):
+    def __init__(self, opt, model, criterion, mbsz=128):
+        super(BBszModel, self).__init__()
+
+        self.opt = opt
+        self.mbsz = mbsz
+        self.model, self.criterion = model, criterion
+        self.copy = deepcopy(self.model)
+
+    def forward_backward(self, x, y):
+        self.copy.zero_grad()
+
+        fs, yhs = [], []
+        s, n = 0, x.size(0)
+        i = 0
+        while s < n:
+            e = min(s+self.mbsz, n)
+
+            if i == 0:
+                self.copy.zero_grad()
+                _yh = self.copy(x[s:e])
+                self.criterion(_yh, y[s:e]).backward()
+                self.copy.zero_grad()
+
+            self.model.zero_grad()
+            yh = self.model(x[s:e])
+            f = self.criterion(yh, y[s:e])
+            f.backward()
+
+            yhs.append(yh)
+            fs.append(f)
+
+            if self.opt['l2'] > 0:
+                for p in self.model.parameters():
+                    p.grad.data.add_(opt['l2'], p.data)
+
+            for q,p in zip(self.copy.parameters(), self.model.parameters()):
+                q.grad.data.add_(p.grad.data)
+
+            i += 1
+            s += self.mbsz
+
+        for q,p in zip(self.copy.parameters(), self.model.parameters()):
+            p.grad.data.copy_(q.grad.data).div_(i)
+
+        return sum(fs), th.cat(yhs)
+
+    def forward(self, x):
+        s, n = 0, x.size(0)
+        y = []
+        while s < n:
+            e = min(s+self.mbsz, n)
+            y.append(self.model(x[s:e]))
+            s+= self.mbsz
+
+        return th.cat(y)
