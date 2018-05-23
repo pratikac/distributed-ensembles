@@ -83,7 +83,7 @@ else:
 ds_128 = ds_128[opt['r']]
 opt['b'] = bsz
 
-model = getattr(models, opt['m'])(opt).cuda()
+model = getattr(models, opt['m'])(opt, microbn=True).cuda()
 criterion = nn.CrossEntropyLoss().cuda()
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
