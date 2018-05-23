@@ -2,7 +2,8 @@ import os, sys, subprocess, json, argparse
 from itertools import product
 import torch as th
 
-parser = argparse.ArgumentParser(description='Quick dirty hyperoptim')
+parser = argparse.ArgumentParser(description='Quick dirty hyperoptim',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-c','--command',   help='Main command', type=str, required=True)
 parser.add_argument('-p','--params',    help='JSON dict of the hyper-parameters', type=str)
 parser.add_argument('-r', '--run',      help='run',  action='store_true')
@@ -11,7 +12,7 @@ parser.add_argument('--dist',           help='using dist sgd',    action='store_
 opt = vars(parser.parse_args())
 
 def chunks(l, n):
-    for i in xrange(0, len(l), n):
+    for i in range(0, len(l), n):
         yield l[i:i+n]
 
 def run_cmds(cmds, max_cmds):
@@ -26,7 +27,7 @@ def run_cmds(cmds, max_cmds):
                 p.wait()
 
         except KeyboardInterrupt:
-            print 'Killling everything'
+            print('Killing everything')
             for p in ps:
                 p.kill()
             sys.exit()
@@ -53,6 +54,6 @@ for v in product(*values):
 
 if not opt['run']:
     for c in cmds:
-        print c
+        print(c)
 else:
     run_cmds(cmds, opt['max_jobs'])

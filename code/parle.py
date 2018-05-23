@@ -230,8 +230,8 @@ def train(e):
         meters.add(dict(f=loss, top1=top1, top5=top5, dt=_dt))
 
         mm = meters.value()
-        if opt['l'] and bi % 25 ==0 and bi > 0:
-            s = dict(i=bi + e*opt['nb'], e=e, train=True)
+        if opt['l'] and b % 25 == 0 and b > 0:
+            s = dict(i=b + e*opt['nb'], e=e, train=True)
             s.update(**mm)
             logger.info('[LOG] ' + json.dumps(s))
 
