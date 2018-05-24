@@ -97,6 +97,7 @@ if opt['r'] == 0:
     pp.pprint(opt)
 
 def parle_step(sync=False):
+    eps = 1e-3
 
     mom, alpha = 0.9, 0.0
     lr = opt['lr']
@@ -156,7 +157,7 @@ def parle_step(sync=False):
         for p in model.parameters():
             # elastic-sgd term
             p.grad.data.zero_()
-            p.grad.data.add_(1.0, xa[p] - za[p]).add_(rho*opt['L'], xa[p] - x[p])
+            p.grad.data.add_(1.0, xa[p] - za[p]).add_(rho*opt['L']*opt['n'], xa[p] - x[p])
 
             mux[p].mul_(mom).add_(p.grad.data)
             p.grad.data.add_(mux[p])
@@ -232,9 +233,10 @@ def train(e):
         parle_step(sync=True)
         _dt = timer() - _dt
 
-        for k in buf:
-            dist.reduce(buf[k], dst=0, op=dist.reduce_op.SUM)
-            buf[k] /= float(opt['n'])
+        if opt['n'] > 1:
+            for k in buf:
+                dist.reduce(buf[k], dst=0, op=dist.reduce_op.SUM)
+                buf[k] /= float(opt['n'])
 
         meters.add(dict(f=buf['f'].item(), top1=buf['top1'].item(), top5=buf['top5'].item(), dt=_dt))
 
