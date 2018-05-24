@@ -40,7 +40,8 @@ opt = add_args([
 ['--lr', 0.1, 'learning rate'],
 ['--lrs', '', 'learning rate schedule'],
 ['--Ls', '', 'schedule for Langevin steps'],
-['--burnin', 1, 'burnin for small batches'],
+['--burnin', 0, 'burnin for small batches'],
+['--microbn', False, 'microbn'],
 ['-L', 25, 'sgld iterations'],
 ['--gamma', 0.01, 'gamma'],
 ['--rho', 0.01, 'rho'],
@@ -84,13 +85,13 @@ else:
 ds_128 = ds_128[opt['r']]
 opt['b'] = bsz
 
-model = getattr(models, opt['m'])(opt, microbn=True).cuda()
+model = getattr(models, opt['m'])(opt, microbn=opt['microbn']).cuda()
 criterion = nn.CrossEntropyLoss().cuda()
 if opt['bbsz'] > 0:
     bbsz_model = models.BBszModel(opt, model, criterion, mbsz=opt['bbsz'])
 
 build_filename(opt, blacklist=['lrs', 'optim', 'gpus', 'gdot', 'depth', 'widen',
-                            'f','v', 'augment', 't', 'nw', 'save_all', 'd',
+                            'f','v', 'augment', 't', 'nw', 'save_all', 'd', 'microbn',
                             'save','e','l2','r', 'lr', 'Ls', 'b', 'resume', 'frac', 'burnin', 'bbsz', 'L'])
 logger = create_logger(opt)
 if opt['r'] == 0:
