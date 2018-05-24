@@ -245,10 +245,11 @@ def train(e):
                 s.update(**mm)
                 logger.info('[LOG] ' + json.dumps(s))
 
-        bif = int(5/mm['dt'])+1
-        if b % bif == 0 and b > 0:
-            print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f %2.2f%% %2.2f%%'))%(_dt,
-                e,b,opt['nb'], mm['f'], mm['top1'], mm['top5']))
+        if opt['r'] == 0:
+            bif = int(5/mm['dt'])+1
+            if b % bif == 0 and b > 0:
+                print((color('blue', '[%2.2fs][%2d][%4d/%4d] %2.4f %2.2f%% %2.2f%%'))%(_dt,
+                    e,b,opt['nb'], mm['f'], mm['top1'], mm['top5']))
 
     mm = meters.value()
     if opt['l'] and opt['r'] == 0:
@@ -257,8 +258,9 @@ def train(e):
         logger.info('[SUMMARY] ' + json.dumps(s))
         logger.info('')
 
-    print((color('blue', '++[%2d] %2.4f %2.2f%% %2.2f%% [%2.2fs]'))% (e, mm['f'], mm['top1'], mm['top5'], meters.m['dt'].sum))
-    print()
+    if opt['r'] == 0:
+        print((color('blue', '++[%2d] %2.4f %2.2f%% %2.2f%% [%2.2fs]'))% (e, mm['f'], mm['top1'], mm['top5'], meters.m['dt'].sum))
+        print()
     return mm
 
 def dry_feed(m):
