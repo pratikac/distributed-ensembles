@@ -155,24 +155,26 @@ def parle_step(sync=False):
         # add another sync, helps with large L
         sync_ref(za, x)
 
-        for p in model.parameters():
-            # elastic-sgd term
-            p.grad.data.zero_()
-            p.grad.data.add_(1.0, xa[p] - za[p]).add_(rho*opt['L']*opt['n'], xa[p] - x[p])
+        if opt['L'] > 1:
+            for p in model.parameters():
+                # elastic-sgd term
+                p.grad.data.zero_()
+                p.grad.data.add_(1.0, xa[p] - za[p]).add_(rho*opt['L']*opt['n'], xa[p] - x[p])
 
-            mux[p].mul_(mom).add_(p.grad.data)
-            p.grad.data.add_(mux[p])
-            p.data.add_(-lr, p.grad.data)
+                mux[p].mul_(mom).add_(p.grad.data)
+                p.grad.data.add_(mux[p])
+                p.data.add_(-lr, p.grad.data)
 
-            xa[p].copy_(p.data)
+                xa[p].copy_(p.data)
 
-        sync_ref(xa, x)
+            sync_ref(xa, x)
         s['t'] += 1
 
     else:
         # entropy-sgd iterations
         for p in model.parameters():
-            p.grad.data.add_(gamma, p.data - xa[p])
+            if opt['L'] > 1:
+                p.grad.data.add_(gamma, p.data - xa[p])
 
             muy[p].mul_(mom).add_(p.grad.data)
             p.grad.data.add_(muy[p])
