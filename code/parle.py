@@ -32,7 +32,7 @@ opt = add_args([
 ['--frac', 1.0, 'fraction of dataset'],
 ['-b', 128, 'batch_size'],
 ['--bbsz', 0, 'very large batch sizes'],
-['--augment', True, 'data augmentation'],
+['--augment', False, 'data augmentation'],
 ['-e', 0, 'start epoch'],
 ['-d', -1., 'dropout'],
 ['--l2', -1., 'ell-2'],
