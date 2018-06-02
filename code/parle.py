@@ -1,9 +1,11 @@
 import torch as th
 import torch.distributed as dist
 import numpy as np
+import visdom
 
 import torch.nn as nn
 import torchnet as tnt
+
 from torchvision.datasets.mnist import MNIST
 from torch.autograd import Variable
 
@@ -97,6 +99,8 @@ logger = create_logger(opt)
 if opt['r'] == 0:
     pp.pprint(opt)
 
+plt = plotter(title=opt['filename'])
+
 def parle_step(sync=False):
     eps = 1e-3
 
@@ -161,7 +165,7 @@ def parle_step(sync=False):
                 p.grad.data.zero_()
                 p.grad.data.add_(1.0, xa[p] - za[p]).add_(rho*opt['L']*opt['n'], xa[p] - x[p])
 
-                mux[p].mul_(mom).add_(p.grad.data)
+                mux[p].mul_(mom/2.0).add_(p.grad.data)
                 p.grad.data.add_(mux[p])
                 p.data.add_(-lr, p.grad.data)
 
@@ -266,6 +270,7 @@ def train(e):
     if opt['r'] == 0:
         print((color('blue', '++[%2d] %2.4f %2.2f%% %2.2f%% [%2.2fs]'))% (e, mm['f'], mm['top1'], mm['top5'], meters.m['dt'].sum))
         print()
+        plt.log(e, mm['top1'], name='train')
     return mm
 
 def dry_feed(m):
@@ -324,6 +329,7 @@ def validate(e):
 
     print((color('red', '**[%2d] %2.4f %2.4f%% %2.4f%%\n'))%(e, mm['f'], mm['top1'], mm['top5']))
     print('')
+    plt.log(e, mm['top1'], name='val')
     return mm
 
 for e in range(opt['B']):

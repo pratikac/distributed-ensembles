@@ -2,6 +2,7 @@ from __future__ import print_function
 import os, pdb, sys, json, subprocess
 import numpy as np
 import time, logging, pprint
+import visdom
 
 import torch as th
 import torchnet as tnt
@@ -47,6 +48,7 @@ def build_filename(opt, blacklist=[], marker=''):
     if not marker == '':
         t = marker + '_'
     t = t + time.strftime('(%b_%d_%H_%M_%S)') + '_opt_'
+    opt['time'] = t
     opt['filename'] = t + json.dumps(o, sort_keys=True,
                 separators=(',', ':'))
 
@@ -217,3 +219,30 @@ def do_profile(follow=[]):
                 profiler.print_stats()
         return profiled_func
     return inner
+
+class plotter:
+    def __init__(self, title):
+        self.win = None
+        self.viz = visdom.Visdom()
+        self.opts = opts=dict(showlegend=True,
+                        markers=True,
+                        markersize=5,
+                        title=title,
+                        colormap='Viridis')
+
+    def log(self, x,y, **kwargs):
+        if self.win is None:
+            self.win = self.viz.line(X=np.array(x).reshape(1,1),
+                                    Y=np.array(y).reshape(1,1),
+                                    opts=self.opts,
+                                    **kwargs)
+        else:
+            self.viz.line(  X=np.array(x).reshape(1,1),
+                            Y=np.array(y).reshape(1,1),
+                            win=self.win,
+                            update='append',
+                            opts=self.opts,
+                            **kwargs)
+
+    def clear(self, name):
+        self.viz.line(X=None, Y=None, win=self.win, name=name, update='remove')
