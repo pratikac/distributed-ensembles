@@ -56,21 +56,21 @@ class Parle(object):
         if not 'w' in state:
             t = th.FloatTensor(N)
 
-            state['w'] = [t.clone().cuda(ids[i]) for i in xrange(n)]
-            state['dw'] = [t.clone().cuda(ids[i]) for i in xrange(n)]
+            state['w'] = [t.clone().cuda(ids[i]) for i in range(n)]
+            state['dw'] = [t.clone().cuda(ids[i]) for i in range(n)]
             state['r'], state['dr'] = t.clone().cuda(rid), t.clone().cuda(rid)
 
             # fake feed
             closure()
 
-            for i in xrange(n):
+            for i in range(n):
                 flatten_params(model.w[i], state['w'][i], state['dw'][i])
             flatten_params(model.ref, state['r'], state['dr'])
 
             for k in ['mw', 'mdw', 'cmdw', 'wc', 'dwc', 'eta']:
-                state[k] = [t.clone().cuda(ids[i]) for i in xrange(n)]
+                state[k] = [t.clone().cuda(ids[i]) for i in range(n)]
 
-            for i in xrange(n):
+            for i in range(n):
                 state['mdw'][i].zero_()
                 state['cmdw'][i].zero_()
 
@@ -88,7 +88,7 @@ class Parle(object):
             model.zero_grad()
             cfs, cerrs, cerrs5 = closure()
             if c['l2'] > 0:
-                for i in xrange(n):
+                for i in range(n):
                     dw[i].add_(c['l2'], w[i])
             return cfs, cerrs, cerrs5
 
@@ -97,7 +97,7 @@ class Parle(object):
         if c['L'] == 0:
             fs, errs, errs5 = feval()
 
-        for i in xrange(n):
+        for i in range(n):
             wc[i].copy_(w[i])
             dwc[i].copy_(dw[i])
             mw[i].copy_(w[i])
@@ -106,9 +106,9 @@ class Parle(object):
         rho = min(c['g1']*(1+c['gdot'])**state['t'], c['g1m'])
         mom = c['mom']
 
-        for l in xrange(c['L']):
+        for l in range(c['L']):
             fs, errs, errs5 = feval()
-            for i in xrange(n):
+            for i in range(n):
 
                 dw[i].add_(g, w[i]-wc[i])
 
@@ -122,7 +122,7 @@ class Parle(object):
         r.copy_(comm.reduce_add(mw, rid)).mul_(1/float(n))
         rc = comm.broadcast(r, ids)
 
-        for i in xrange(n):
+        for i in range(n):
             if c['L'] > 0:
                 dw[i].copy_(wc[i]-mw[i])
             else:
@@ -225,7 +225,7 @@ class ProxSGD(object):
 
         fs, errs, errs5 = None, None, None
 
-        for l in xrange(c['L']):
+        for l in range(c['L']):
             fs, errs, errs5 = feval()
 
             dw.add_(g, w-wc)
@@ -296,12 +296,12 @@ class FederatedParle(object):
 
             state['r'] = t.clone()
             for k in ['w', 'dw', 'mdw', 'cmdw', 'wc', 'dwc']:
-                state[k] = [t.clone() for i in xrange(n)]
+                state[k] = [t.clone() for i in range(n)]
 
-            for i in xrange(n):
+            for i in range(n):
                 copy_from_params(model.w[i], state['w'][i], state['dw'][i])
 
-            for i in xrange(n):
+            for i in range(n):
                 state['mdw'][i].zero_()
                 state['cmdw'][i].zero_()
 
@@ -315,17 +315,17 @@ class FederatedParle(object):
         r = state['r']
 
         def feval():
-            for i in xrange(n):
+            for i in range(n):
                 model.w[i].zero_grad()
                 copy_to_params(model.w[i], w[i])
 
             cfs, cerrs, cerrs5 = closure()
 
-            for i in xrange(n):
+            for i in range(n):
                 copy_from_params(model.w[i], w[i], dw[i])
 
             if c['l2'] > 0:
-                for i in xrange(n):
+                for i in range(n):
                     dw[i].add_(c['l2'], w[i])
             return cfs, cerrs, cerrs5
 
@@ -334,7 +334,7 @@ class FederatedParle(object):
         if c['L'] == 0:
             fs, errs, errs5 = feval()
 
-        for i in xrange(n):
+        for i in range(n):
             copy_from_params(model.w[i], w[i], dw[i])
             wc[i].copy_(w[i])
             dwc[i].copy_(dw[i])
@@ -342,9 +342,9 @@ class FederatedParle(object):
         g = min(c['g0']*(1+c['gdot'])**state['t'], c['g0m'])
         rho = min(c['g1']*(1+c['gdot'])**state['t'], c['g1m'])
 
-        for l in xrange(c['L']):
+        for l in range(c['L']):
             fs, errs, errs5 = feval()
-            for i in xrange(n):
+            for i in range(n):
                 dw[i].add_(g, w[i]-wc[i])
 
                 if c['mom'] > 0:
@@ -354,10 +354,10 @@ class FederatedParle(object):
                 w[i].add_(-c['llr'], dw[i])
 
         r.zero_()
-        for i in xrange(n):
+        for i in range(n):
             r.add_(1/float(n), w[i])
 
-        for i in xrange(n):
+        for i in range(n):
             if c['L'] > 0:
                 dw[i].copy_(wc[i]-w[i])
             else:
@@ -373,10 +373,10 @@ class FederatedParle(object):
             w[i].add_(-c['lr'], dw[i])
 
         r.zero_()
-        for i in xrange(n):
+        for i in range(n):
             r.add_(1/float(n), w[i])
 
-        for i in xrange(n):
+        for i in range(n):
             copy_to_params(model.w[i], w[i])
         copy_to_params(model.ref, r)
 

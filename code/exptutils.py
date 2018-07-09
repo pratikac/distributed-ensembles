@@ -172,7 +172,7 @@ def schedule(opt, e, logger=None, k='lr'):
     rs = json.loads(opt[ks])
 
     idx = len(rs)-1
-    for i in xrange(len(rs)):
+    for i in range(len(rs)):
         if e < rs[i][0]:
             idx = i
             break
